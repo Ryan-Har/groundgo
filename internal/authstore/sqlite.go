@@ -51,7 +51,7 @@ func (s *sqliteAuthStore) CheckEmailExists(ctx context.Context, email string) (b
 }
 
 func (s *sqliteAuthStore) CreateUser(ctx context.Context, args models.CreateUserParams) (models.User, error) {
-	defer s.newTimingLogger(time.Now(), "created user", "email", args.Email, "role", args.Role)()
+	defer s.newTimingLogger(time.Now(), "executed sql query", "method", "CreateUser", args.Email, "role", args.Role)()
 	params, err := transform.ToSQLiteCreateUserParams(args)
 	if err != nil {
 		s.log.Error(err, "creating user")
@@ -59,4 +59,13 @@ func (s *sqliteAuthStore) CreateUser(ctx context.Context, args models.CreateUser
 	}
 	sqlUser, err := s.queries.CreateUser(ctx, params)
 	return transform.FromSQLiteUser(sqlUser), err
+}
+
+func (s *sqliteAuthStore) GetUserByEmail(ctx context.Context, email string) (models.User, error) {
+	defer s.newTimingLogger(time.Now(), "executed sql query", "method", "GetUserByEmail", "args", map[string]any{"email": email})()
+	sqlUser, err := s.queries.GetUserByEmail(ctx, email)
+	if err != nil {
+		return models.User{}, err
+	}
+	return transform.FromSQLiteUser(sqlUser), nil
 }

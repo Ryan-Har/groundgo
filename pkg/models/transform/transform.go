@@ -1,6 +1,8 @@
 package transform
 
 import (
+	"time"
+
 	"github.com/Ryan-Har/groundgo/internal/db/sqliteDB"
 	"github.com/Ryan-Har/groundgo/pkg/models"
 	"github.com/Ryan-Har/groundgo/pkg/models/passwd"
@@ -15,8 +17,8 @@ func FromSQLiteUser(args sqliteDB.User) models.User {
 		Claims:        args.Claims,
 		OauthProvider: args.OauthProvider,
 		OauthID:       args.OauthID,
-		CreatedAt:     args.CreatedAt,
-		UpdatedAt:     args.UpdatedAt,
+		CreatedAt:     time.Unix(args.CreatedAt, 0),
+		UpdatedAt:     time.Unix(args.UpdatedAt, 0),
 		IsActive:      args.IsActive,
 	}
 }
@@ -30,8 +32,8 @@ func ToSQLiteUser(args models.User) sqliteDB.User {
 		Claims:        args.Claims,
 		OauthProvider: args.OauthProvider,
 		OauthID:       args.OauthID,
-		CreatedAt:     args.CreatedAt,
-		UpdatedAt:     args.UpdatedAt,
+		CreatedAt:     args.CreatedAt.Unix(),
+		UpdatedAt:     args.UpdatedAt.Unix(),
 		IsActive:      args.IsActive,
 	}
 }

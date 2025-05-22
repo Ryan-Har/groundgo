@@ -1,13 +1,12 @@
 package main
 
 import (
-	"context"
 	"database/sql"
 	"log/slog"
+	"net/http"
 	"os"
 
 	"github.com/Ryan-Har/groundgo"
-	"github.com/Ryan-Har/groundgo/pkg/models"
 	"github.com/go-logr/logr"
 )
 
@@ -25,6 +24,7 @@ func main() {
 	}
 	defer db.Close()
 
+	// create new groundgo instance
 	gg, err := groundgo.New(
 		groundgo.WithSqliteDB(db),
 		groundgo.WithLogger(logger),
@@ -34,17 +34,16 @@ func main() {
 		logger.Error(err, "starting groundgo")
 	}
 
-	ctx := context.Background()
-	gg.Auth.CreateUser(ctx, models.CreateUserParams{
-		Email:    "testAdmin@example.com",
-		Password: strPtr("MySuperSecurePassword"),
-		Role:     "Admin",
+	// create http mux for use with groundgo
+	mainMux := http.NewServeMux()
+	gg.Web.SetRoutes(mainMux)
+
+	// now load any additional routed however you like
+	mainMux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Hello from the main application root!"))
 	})
 
-	select {}
-}
-
-// helper function to easily get string pointers
-func strPtr(s string) *string {
-	return &s
+	if err := http.ListenAndServe(":8080", mainMux); err != nil {
+		panic("http server failed")
+	}
 }

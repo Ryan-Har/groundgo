@@ -1,0 +1,22 @@
+package templates
+
+templ Layout(title string, content templ.Component) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="UTF-8"/>
+			<title>{ title }</title>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css"/>
+			<script src="https://unpkg.com/htmx.org@1.9.5"></script>
+			<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+		</head>
+		<body>
+			<section class="section">
+				<div class="container">
+					@content
+				</div>
+			</section>
+		</body>
+	</html>
+}

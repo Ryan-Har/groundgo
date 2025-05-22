@@ -2,15 +2,18 @@ package groundgo
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/Ryan-Har/groundgo/internal/authstore"
+	"github.com/Ryan-Har/groundgo/web"
 	"github.com/go-logr/logr"
 )
 
 type GroundGo struct {
 	logger logr.Logger
 	Auth   authstore.AuthStore
+	Web    *web.WebHandler
 }
 
 type Option func(*GroundGo)
@@ -40,10 +43,15 @@ func New(opts ...Option) (*GroundGo, error) {
 		opt(gg)
 	}
 
+	gg.logger.V(0).Info("starting groundgo")
+
+	if gg.Auth == nil {
+		return nil, errors.New("no DB provided")
+	}
 	// reset auth logger incase WithLogger wasn't set first
 	gg.Auth.SetLogger(gg.logger)
-
-	gg.logger.V(0).Info("starting groundgo")
+	// create web handler now that authStore is configured
+	gg.Web = web.New(gg.logger, gg.Auth)
 	// check if database is pingable
 	if err := gg.Auth.Ping(); err != nil {
 		return nil, fmt.Errorf("unable to ping database: %w", err)

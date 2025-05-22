@@ -12,9 +12,10 @@ import (
 type AuthStore interface {
 	Ping() error
 	RunMigrations() error
+	SetLogger(logger logr.Logger)
 	CheckEmailExists(ctx context.Context, email string) (bool, error)
 	CreateUser(ctx context.Context, args models.CreateUserParams) (models.User, error)
-	SetLogger(logger logr.Logger)
+	GetUserByEmail(ctx context.Context, email string) (models.User, error)
 }
 
 func NewWithSqliteStore(db *sql.DB, logger logr.Logger) *sqliteAuthStore {

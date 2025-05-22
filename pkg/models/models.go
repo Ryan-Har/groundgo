@@ -1,5 +1,9 @@
 package models
 
+import (
+	"time"
+)
+
 type CreateUserParams struct {
 	Email         string  `json:"email"`
 	Password      *string `json:"password"`
@@ -10,14 +14,14 @@ type CreateUserParams struct {
 }
 
 type User struct {
-	ID            int64   `json:"id"`
-	Email         string  `json:"email"`
-	PasswordHash  *string `json:"passwordHash"`
-	Role          string  `json:"role"`
-	Claims        *string `json:"claims"`
-	OauthProvider *string `json:"oauthProvider"`
-	OauthID       *string `json:"oauthId"`
-	CreatedAt     int64   `json:"createdAt"`
-	UpdatedAt     int64   `json:"updatedAt"`
-	IsActive      bool    `json:"isActive"`
+	ID            int64     `json:"id"`
+	Email         string    `json:"email"`
+	PasswordHash  *string   `json:"passwordHash"`
+	Role          string    `json:"role"`
+	Claims        *string   `json:"claims"`
+	OauthProvider *string   `json:"oauthProvider"`
+	OauthID       *string   `json:"oauthId"`
+	CreatedAt     time.Time `json:"createdAt"`
+	UpdatedAt     time.Time `json:"updatedAt"`
+	IsActive      bool      `json:"isActive"`
 }
