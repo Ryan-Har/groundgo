@@ -36,7 +36,7 @@ func (h *WebHandler) SetLogger(logger logr.Logger) {
 // SetRoutes registers the library's HTTP routes on the provided mux
 func (h *WebHandler) SetRoutes(mux Mux) {
 	mux.HandleFunc("GET /login", func(w http.ResponseWriter, r *http.Request) {
-		h.logger.V(0).Info("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
+		h.logger.V(3).Info("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 		content := templates.LoginPage()
 		if err := templates.Layout("Login", content).Render(r.Context(), w); err != nil {
 			h.logger.Error(err, "unable to GET /login")
@@ -45,11 +45,11 @@ func (h *WebHandler) SetRoutes(mux Mux) {
 	})
 
 	mux.HandleFunc("POST /login", func(w http.ResponseWriter, r *http.Request) {
-		h.logger.V(0).Info("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
+		h.logger.V(3).Info("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 		defer h.logger.V(4).Info("Processed", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 
 		if err := r.ParseForm(); err != nil {
-			h.logger.Error(err, "parsing form from POST /signup")
+			h.logger.Error(err, "parsing form from POST /login")
 			http.Error(w, "Invalid form", http.StatusBadRequest)
 			return
 		}
@@ -77,7 +77,7 @@ func (h *WebHandler) SetRoutes(mux Mux) {
 	})
 
 	mux.HandleFunc("GET /signup", func(w http.ResponseWriter, r *http.Request) {
-		h.logger.V(0).Info("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
+		h.logger.V(3).Info("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 		content := templates.SignupPage()
 		if err := templates.Layout("Signup", content).Render(r.Context(), w); err != nil {
 			h.logger.Error(err, "unable to GET /signup")
@@ -86,7 +86,7 @@ func (h *WebHandler) SetRoutes(mux Mux) {
 	})
 
 	mux.HandleFunc("POST /signup", func(w http.ResponseWriter, r *http.Request) {
-		h.logger.V(0).Info("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
+		h.logger.V(3).Info("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 		defer h.logger.V(4).Info("Processed", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 
 		if err := r.ParseForm(); err != nil {
