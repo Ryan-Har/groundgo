@@ -3,6 +3,7 @@ package authstore
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/Ryan-Har/groundgo/database"
@@ -10,6 +11,7 @@ import (
 	"github.com/Ryan-Har/groundgo/pkg/models"
 	"github.com/Ryan-Har/groundgo/pkg/models/transform"
 	"github.com/go-logr/logr"
+	"github.com/google/uuid"
 )
 
 type sqliteAuthStore struct {
@@ -27,11 +29,6 @@ func (s *sqliteAuthStore) RunMigrations() error {
 	defer s.newTimingLogger(time.Now(), "ran database migrations")()
 	s.log.V(0).Info("running auth database migrations")
 	return database.RunSqliteMigrations(s.db)
-}
-
-// used to set the logger the auth store uses to log
-func (s *sqliteAuthStore) SetLogger(logger logr.Logger) {
-	s.log = logger
 }
 
 // newTimingLogger returns a function that, when deferred, logs the elapsed time at an info level.
@@ -57,8 +54,20 @@ func (s *sqliteAuthStore) CreateUser(ctx context.Context, args models.CreateUser
 		s.log.Error(err, "creating user")
 		return models.User{}, err
 	}
+	//generate UUID manually for sqlite
+	params.ID = uuid.NewString()
+
 	sqlUser, err := s.queries.CreateUser(ctx, params)
-	return transform.FromSQLiteUser(sqlUser), err
+	if err != nil {
+		s.log.Error(err, "creating user")
+		return models.User{}, err
+	}
+	user, err := transform.FromSQLiteUser(sqlUser)
+	if err != nil {
+		s.log.Error(err, "transforming user")
+		return models.User{}, err
+	}
+	return user, nil
 }
 
 func (s *sqliteAuthStore) GetUserByEmail(ctx context.Context, email string) (models.User, error) {
@@ -67,5 +76,29 @@ func (s *sqliteAuthStore) GetUserByEmail(ctx context.Context, email string) (mod
 	if err != nil {
 		return models.User{}, err
 	}
-	return transform.FromSQLiteUser(sqlUser), nil
+	user, err := transform.FromSQLiteUser(sqlUser)
+	if err != nil {
+		s.log.Error(err, "transforming user")
+		return models.User{}, err
+	}
+	return user, nil
+}
+
+func (s *sqliteAuthStore) GetUserByID(ctx context.Context, id uuid.UUID) (models.User, error) {
+	defer s.newTimingLogger(time.Now(), "executed sql query", "method", "GetUserByID", "args", map[string]any{"ID": id.String()})()
+
+	if id == uuid.Nil {
+		return models.User{}, errors.New("invalid id found")
+	}
+
+	sqlUser, err := s.queries.GetUserByID(ctx, id.String())
+	if err != nil {
+		return models.User{}, err
+	}
+	user, err := transform.FromSQLiteUser(sqlUser)
+	if err != nil {
+		s.log.Error(err, "transforming user")
+		return models.User{}, err
+	}
+	return user, nil
 }

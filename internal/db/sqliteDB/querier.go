@@ -16,13 +16,13 @@ type Querier interface {
 	// Returns the newly created user's ID.
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	// Deletes a user from the database by their ID.
-	DeleteUser(ctx context.Context, id int64) error
+	DeleteUser(ctx context.Context, id string) error
 	// Retrieves a user by their email address.
 	// Used for login and checking existing registrations.
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	// Retrieves a user by their unique ID.
 	// Used for session validation and fetching user details.
-	GetUserByID(ctx context.Context, id int64) (User, error)
+	GetUserByID(ctx context.Context, id string) (User, error)
 	// Retrieves a user by their OAuth provider and OAuth ID.
 	// Used for logging in users who registered via an OAuth provider.
 	GetUserByOAuth(ctx context.Context, arg GetUserByOAuthParams) (User, error)

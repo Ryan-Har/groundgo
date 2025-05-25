@@ -29,6 +29,7 @@ func (q *Queries) CheckEmailExists(ctx context.Context, email string) (int64, er
 
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (
+    id,
     email,
     password_hash,
     role,
@@ -36,7 +37,7 @@ INSERT INTO users (
     oauth_provider,
     oauth_id
 ) VALUES (
-    ?, ?, ?, ?, ?, ?
+    ?,?, ?, ?, ?, ?, ?
 )
 RETURNING
     id,
@@ -52,6 +53,7 @@ RETURNING
 `
 
 type CreateUserParams struct {
+	ID            string  `json:"id"`
 	Email         string  `json:"email"`
 	PasswordHash  *string `json:"passwordHash"`
 	Role          string  `json:"role"`
@@ -64,6 +66,7 @@ type CreateUserParams struct {
 // Returns the newly created user's ID.
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
 	row := q.db.QueryRowContext(ctx, createUser,
+		arg.ID,
 		arg.Email,
 		arg.PasswordHash,
 		arg.Role,
@@ -95,7 +98,7 @@ WHERE
 `
 
 // Deletes a user from the database by their ID.
-func (q *Queries) DeleteUser(ctx context.Context, id int64) error {
+func (q *Queries) DeleteUser(ctx context.Context, id string) error {
 	_, err := q.db.ExecContext(ctx, deleteUser, id)
 	return err
 }
@@ -158,7 +161,7 @@ WHERE
 
 // Retrieves a user by their unique ID.
 // Used for session validation and fetching user details.
-func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
+func (q *Queries) GetUserByID(ctx context.Context, id string) (User, error) {
 	row := q.db.QueryRowContext(ctx, getUserByID, id)
 	var i User
 	err := row.Scan(
@@ -285,7 +288,7 @@ WHERE
 
 type UpdateUserClaimsParams struct {
 	Claims *string `json:"claims"`
-	ID     int64   `json:"id"`
+	ID     string  `json:"id"`
 }
 
 // Updates a user's JSON claims data and updates the 'updated_at' timestamp.
@@ -305,8 +308,8 @@ WHERE
 `
 
 type UpdateUserIsActiveParams struct {
-	IsActive bool  `json:"isActive"`
-	ID       int64 `json:"id"`
+	IsActive bool   `json:"isActive"`
+	ID       string `json:"id"`
 }
 
 // Updates a user's active status (e.g., for deactivation) and updates the 'updated_at' timestamp.
@@ -327,7 +330,7 @@ WHERE
 
 type UpdateUserPasswordParams struct {
 	PasswordHash *string `json:"passwordHash"`
-	ID           int64   `json:"id"`
+	ID           string  `json:"id"`
 }
 
 // Updates a user's password hash and updates the 'updated_at' timestamp.
@@ -348,7 +351,7 @@ WHERE
 
 type UpdateUserRoleParams struct {
 	Role string `json:"role"`
-	ID   int64  `json:"id"`
+	ID   string `json:"id"`
 }
 
 // Updates a user's role and updates the 'updated_at' timestamp.

@@ -2,6 +2,8 @@ package models
 
 import (
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type CreateUserParams struct {
@@ -14,11 +16,11 @@ type CreateUserParams struct {
 }
 
 type User struct {
-	ID            int64     `json:"id"`
+	ID            uuid.UUID `json:"id"`
 	Email         string    `json:"email"`
 	PasswordHash  *string   `json:"passwordHash"`
-	Role          string    `json:"role"`
-	Claims        *string   `json:"claims"`
+	Role          Role      `json:"role"`
+	Claims        Claims    `json:"claims"`
 	OauthProvider *string   `json:"oauthProvider"`
 	OauthID       *string   `json:"oauthId"`
 	CreatedAt     time.Time `json:"createdAt"`

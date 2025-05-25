@@ -2,6 +2,7 @@
 -- Inserts a new user into the database.
 -- Returns the newly created user's ID.
 INSERT INTO users (
+    id,
     email,
     password_hash,
     role,
@@ -9,7 +10,7 @@ INSERT INTO users (
     oauth_provider,
     oauth_id
 ) VALUES (
-    ?, ?, ?, ?, ?, ?
+    ?,?, ?, ?, ?, ?, ?
 )
 RETURNING
     id,
