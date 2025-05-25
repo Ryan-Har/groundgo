@@ -19,13 +19,26 @@ const (
 	RoleSystemAdmin Role = "sysadmin"  // system wide administrator, highest privilege
 )
 
+// RoleHierarchy defines the privilege level of each role.
+// Higher numbers represent higher privileges.
+// If you define additional roles, place them in here.
+var RoleHierarchy = map[Role]int{
+	RoleGuest:       0,
+	RoleReadOnly:    10,
+	RoleUser:        20,
+	RoleAuditor:     30,
+	RoleEditor:      40,
+	RoleModerator:   50,
+	RoleSupport:     60,
+	RoleAdmin:       70,
+	RoleOwner:       80,
+	RoleSystemAdmin: 90,
+}
+
 // IsValid checks if the Role is one of the predefined valid roles.
 func (r Role) IsValid() bool {
-	switch r {
-	case RoleGuest, RoleReadOnly, RoleUser, RoleAuditor, RoleEditor, RoleModerator, RoleSupport, RoleAdmin, RoleOwner, RoleSystemAdmin:
-		return true
-	}
-	return false
+	_, exists := RoleHierarchy[r]
+	return exists
 }
 
 // String implements the fmt.Stringer interface, providing a string representation of the Role.
@@ -33,7 +46,7 @@ func (r Role) String() string {
 	return string(r)
 }
 
-// UnmarshalText and MarshalText methods (as discussed previously)
+// UnmarshalText and MarshalText methods
 func (r *Role) UnmarshalText(text []byte) error {
 	s := Role(text)
 	if !s.IsValid() {
@@ -45,4 +58,11 @@ func (r *Role) UnmarshalText(text []byte) error {
 
 func (r Role) MarshalText() ([]byte, error) {
 	return []byte(r.String()), nil
+}
+
+func (r Role) AtLeast(min Role) bool {
+	if r.IsValid() && min.IsValid() {
+		return RoleHierarchy[r] >= RoleHierarchy[min]
+	}
+	return false
 }

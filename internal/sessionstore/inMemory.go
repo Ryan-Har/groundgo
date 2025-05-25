@@ -10,6 +10,7 @@ import (
 )
 
 type inMemorySessionStore struct {
+	*baseSessionStore
 	sessions      map[string]*Session // sessionID -> userID
 	mutex         *sync.Mutex
 	log           logr.Logger
@@ -32,19 +33,12 @@ func (s *inMemorySessionStore) Create(ctx context.Context, userID uuid.UUID) (*S
 	default:
 	}
 
-	now := time.Now()
-	session := &Session{
-		UserID:    userID,
-		ExpiresAt: now.Add(s.tokenDuration),
-		CreatedAt: now,
-	}
-
 	sesID, err := generateSecureToken(s.tokenLength)
 	if err != nil {
 		return nil, err
 	}
-	session.ID = sesID
 
+	session := s.createSession(sesID, userID, s.tokenDuration)
 	s.sessions[sesID] = session
 
 	s.log.V(4).Info("created session", "session_id", session.ID, "user_id", session.UserID.String())
@@ -66,12 +60,10 @@ func (s *inMemorySessionStore) Get(ctx context.Context, sessionID string) (*Sess
 	}
 
 	sess, ok := s.sessions[sessionID]
-	if !ok {
+	if !ok || sess.ExpiresAt.Before(time.Now()) {
 		return nil, &SessionExpiredError{ID: sessionID}
 	}
-	if sess.ExpiresAt.Before(time.Now()) {
-		return nil, &SessionExpiredError{ID: sessionID}
-	}
+
 	return sess, nil
 }
 
@@ -110,10 +102,7 @@ func (s *inMemorySessionStore) Renew(ctx context.Context, sessionID string) erro
 	}
 
 	sess, ok := s.sessions[sessionID]
-	if !ok {
-		return &SessionExpiredError{ID: sessionID}
-	}
-	if sess.ExpiresAt.Before(time.Now()) {
+	if !ok || sess.ExpiresAt.Before(time.Now()) {
 		return &SessionExpiredError{ID: sessionID}
 	}
 
@@ -145,8 +134,6 @@ func (s *inMemorySessionStore) DeleteUser(ctx context.Context, userID uuid.UUID)
 }
 
 func (s *inMemorySessionStore) CleanupExpired(ctx context.Context) error {
-	s.log.V(1).Info("deleting expired sessions")
-
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 

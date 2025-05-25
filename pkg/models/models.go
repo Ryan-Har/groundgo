@@ -10,7 +10,7 @@ type CreateUserParams struct {
 	Email         string  `json:"email"`
 	Password      *string `json:"password"`
 	Role          string  `json:"role"`
-	Claims        *string `json:"claims"`
+	Claims        Claims  `json:"claims"`
 	OauthProvider *string `json:"oauthProvider"`
 	OauthID       *string `json:"oauthId"`
 }

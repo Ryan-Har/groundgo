@@ -62,10 +62,15 @@ func ToSQLiteCreateUserParams(args models.CreateUserParams) (sqliteDB.CreateUser
 	params := sqliteDB.CreateUserParams{
 		Email:         args.Email,
 		Role:          args.Role,
-		Claims:        args.Claims,
 		OauthProvider: args.OauthProvider,
 		OauthID:       args.OauthID,
 	}
+
+	claims, err := SerializeClaims(args.Claims)
+	if err != nil {
+		return sqliteDB.CreateUserParams{}, err
+	}
+	params.Claims = claims
 
 	// passwords can be nil when using Oauth
 	if args.Password != nil {

@@ -1,9 +1,10 @@
 package access
 
 import (
-	"errors"
 	"net/http"
 	"strings"
+
+	"slices"
 
 	"github.com/Ryan-Har/groundgo/internal/authstore"
 	"github.com/Ryan-Har/groundgo/internal/sessionstore"
@@ -12,30 +13,17 @@ import (
 )
 
 type Enforcer struct {
-	logger        logr.Logger
-	RoleHierarchy map[models.Role]int
-	Policies      map[string]map[string]models.Role  // e.g route: {Get: RoleUser, Post: RoleAdmin}
-	handlers      map[string]map[string]http.Handler // path -> method -> handler internal mapping
-	router        Router                             // used for middlewares and creating routes
-	auth          authstore.Store
-	session       sessionstore.Store
+	logger   logr.Logger
+	Policies map[string]map[string]models.Role  // e.g route: {Get: RoleUser, Post: RoleAdmin}
+	handlers map[string]map[string]http.Handler // path -> method -> handler internal mapping
+	router   Router                             // used for middlewares and creating routes
+	auth     authstore.Store
+	session  sessionstore.Store
 }
 
 func NewEnforcer(logger logr.Logger, router Router, auth authstore.Store, sess sessionstore.Store) *Enforcer {
 	return &Enforcer{
-		logger: logger,
-		RoleHierarchy: map[models.Role]int{
-			models.RoleGuest:       0,
-			models.RoleReadOnly:    1,
-			models.RoleUser:        2,
-			models.RoleAuditor:     3,
-			models.RoleEditor:      4,
-			models.RoleModerator:   5,
-			models.RoleSupport:     6,
-			models.RoleAdmin:       7,
-			models.RoleOwner:       8,
-			models.RoleSystemAdmin: 9,
-		},
+		logger:   logger,
 		Policies: map[string]map[string]models.Role{},
 		router:   router,
 		auth:     auth,
@@ -47,7 +35,7 @@ func (e *Enforcer) LoadDefaultPolicies() {
 	e.SetPolicy("/login", "GET", models.RoleGuest)
 	e.SetPolicy("/login", "POST", models.RoleGuest)
 	e.SetPolicy("/signup", "GET", models.RoleGuest)
-	e.SetPolicy("/signup", "GET", models.RoleGuest)
+	e.SetPolicy("/signup", "POST", models.RoleGuest)
 	e.SetPolicy("/", "GET", models.RoleGuest)
 }
 
@@ -105,52 +93,10 @@ func (e *Enforcer) FindMatchingPolicy(resourcePath, method string) (models.Role,
 		}
 	}
 
-	return "", false
-}
-
-// HasRole checks if the provided Claims (user's roles) grant sufficient access
-// to a given resource for a required minimum role, based on the role hierarchy
-func (e *Enforcer) HasRole(c models.Claims, resource string, required models.Role) bool {
-	actual, ok := c[resource]
-	if !ok {
-		return false
-	}
-	// Validate that both the actual and required roles exist in the RoleHierarchy.
-	actualLevel, actualOk := e.RoleHierarchy[actual]
-	requiredLevel, requiredOk := e.RoleHierarchy[required]
-	if !actualOk || !requiredOk {
-		e.logger.Error(errors.New("role not found in enforcer hierarchy"), "actual", actual, "actual_exists", actualOk, "required", required, "required_exists", requiredOk)
-		return false
-	}
-	return actualLevel >= requiredLevel
-}
-
-// lookupRequiredRole determines the role required for a given method and path.
-// It checks for method-specific policies first, then falls back to any-method ("*") policies.
-// If no policy is found, it defaults to RoleGuest.
-func (e *Enforcer) LookupRequiredRole(method, path string) models.Role {
-	methods, ok := e.Policies[path]
-	if !ok {
-		return models.RoleGuest
-	}
-
-	if role, ok := methods[method]; ok {
-		return role
-	}
-
-	if role, ok := methods["*"]; ok {
-		return role
-	}
-
-	return models.RoleGuest
+	return models.RoleGuest, false
 }
 
 // Helper to check if a string is in a slice
 func contains(s []string, e string) bool {
-	for _, a := range s {
-		if a == e {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(s, e)
 }

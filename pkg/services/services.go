@@ -18,8 +18,8 @@ type Services struct {
 type DBType string
 
 const (
-	DBTypeSQLite   = "sqlite"
-	DBTypePostgres = "postgres"
+	DBTypeSQLite   DBType = "sqlite"
+	DBTypePostgres DBType = "postgres"
 )
 
 func New(db *sql.DB, dbType DBType, logger logr.Logger, sessionInMemory bool) *Services {
@@ -36,4 +36,3 @@ func New(db *sql.DB, dbType DBType, logger logr.Logger, sessionInMemory bool) *S
 	}
 	return svc
 }
-

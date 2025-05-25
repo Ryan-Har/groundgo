@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 
@@ -22,12 +23,13 @@ type Session struct {
 
 func NewInMemory(logger logr.Logger) *inMemorySessionStore {
 	s := &inMemorySessionStore{
-		sessions:      make(map[string]*Session),
-		mutex:         new(sync.Mutex),
-		log:           logger,
-		tokenLength:   32,
-		tokenDuration: time.Minute * 30,
-		stopCh:        make(chan struct{}),
+		baseSessionStore: NewBase(logger),
+		sessions:         make(map[string]*Session),
+		mutex:            new(sync.Mutex),
+		log:              logger,
+		tokenLength:      32,
+		tokenDuration:    time.Minute * 30,
+		stopCh:           make(chan struct{}),
 	}
 
 	s.startCleanupWorker(time.Second * 10)
@@ -58,6 +60,9 @@ type Store interface {
 	// This is crucial for in-memory stores to prevent memory leaks and should
 	// ideally be run periodically (e.g., as a goroutine).
 	CleanupExpired(ctx context.Context) error
+
+	//base methods, for various functions required by the store
+	ExpireCookie(c *http.Cookie, w http.ResponseWriter)
 }
 
 // helper to generate secure token of a given length

@@ -49,6 +49,14 @@ func (s *sqliteAuthStore) CheckEmailExists(ctx context.Context, email string) (b
 
 func (s *sqliteAuthStore) CreateUser(ctx context.Context, args models.CreateUserParams) (models.User, error) {
 	defer s.newTimingLogger(time.Now(), "executed sql query", "method", "CreateUser", "args", map[string]any{"email": args.Email, "role": args.Role})()
+
+	// set the root to the provided role
+	if len(args.Claims) <= 0 && args.Role != "" {
+		args.Claims = models.Claims{
+			"/": models.Role(args.Role),
+		}
+	}
+
 	params, err := transform.ToSQLiteCreateUserParams(args)
 	if err != nil {
 		s.log.Error(err, "creating user")
