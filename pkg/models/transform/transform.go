@@ -1,3 +1,7 @@
+// Package transform contains internal helpers for converting between database-specific
+// representations (e.g. sqliteDB.User) and the shared models.User domain type.
+//
+// This package is not intended for use outside the application layer.
 package transform
 
 import (

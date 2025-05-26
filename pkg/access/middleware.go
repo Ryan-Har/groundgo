@@ -15,8 +15,28 @@ const (
 	userContextKey contextKey = "user"
 )
 
-// AuthenticationMiddleware ensures that a user is present in the request context.
-// If no user is authenticated, it injects a default guest user with RoleGuest.
+// AuthenticationMiddleware is an HTTP middleware that extracts and validates
+// user authentication state from the request cookie and attaches a user object
+// to the request context.
+//
+// If a valid session cookie is found, the corresponding user is retrieved and
+// passed downstream via context. If the session is expired, it clears the cookie
+// and redirects the client to the login page. If no session is found or validation
+// fails, the user is treated as a guest and assigned minimal access.
+//
+// This middleware does not enforce access control — it only authenticates the
+// user. Authorization logic should be applied downstream (e.g., via RequireAuth).
+//
+// Context Injection:
+//   - A *models.User is stored under the key `userContextKey` for downstream handlers.
+//
+// Usage:
+//
+//	http.Handle("/profile", enforcer.AuthenticationMiddleware(http.HandlerFunc(ProfileHandler)))
+//
+// Typical redirect behavior:
+//   - Expired session ➝ `/login` with StatusSeeOther
+//   - Unknown error ➝ `/login` with StatusInternalServerError
 func (e *Enforcer) AuthenticationMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var isAuthenticated bool
@@ -62,14 +82,36 @@ func (e *Enforcer) AuthenticationMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// AuthorizationMiddleware checks if the current user has the required role
-// to access the route. If not, it responds with HTTP 403 Forbidden.
+// AuthorizationMiddleware returns an HTTP middleware that ensures the user has
+// the required role for accessing a specific path.
+//
+// It expects that AuthenticationMiddleware has already been applied and that a
+// *models.User is present in the request context under the `userContextKey`.
+// If the user context is missing, it logs an error and returns a 500 Internal Server Error.
+// If the user lacks sufficient permissions, it returns a 403 Forbidden response.
+//
+// Parameters:
+//   - path: the route path against which the user's role is validated.
+//   - required: the minimum role required to access the path.
+//
+// Logging:
+//   - If the user context is missing, logs an info-level message with verbosity 0.
+//
+// Example usage:
+//
+//	router.Handle("/admin",
+//	  enforcer.AuthenticationMiddleware(
+//	    enforcer.AuthorizationMiddleware("/admin", models.RoleAdmin)(adminHandler),
+//	  ),
+//	)
 func (e *Enforcer) AuthorizationMiddleware(path string, required models.Role) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			user, ok := r.Context().Value(userContextKey).(*models.User)
 			if !ok {
-				panic("no user in context")
+				e.logger.V(0).Info("AuthorizationMiddleware expected User in http context and did not receive")
+				http.Error(w, "Forbidden", http.StatusInternalServerError)
+				return
 			}
 
 			if !user.Claims.HasAtLeast(path, required) {
