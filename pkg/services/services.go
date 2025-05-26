@@ -22,6 +22,22 @@ const (
 	DBTypePostgres DBType = "postgres"
 )
 
+// New initializes and returns a Services struct with the appropriate
+// subcomponents (e.g., Auth, Session) based on the provided configuration.
+//
+// The dbType parameter determines the type of database backend used for storage,
+// and sessionInMemory controls whether session storage is in-memory or not.
+//
+// Params:
+//   - db: a live database connection
+//   - dbType: the type of database (e.g., SQLite, Postgres) used to determine
+//     how to initialize subcomponents like Auth
+//   - logger: a logr.Logger instance used for logging
+//   - sessionInMemory: if true, an in-memory session store is initialized
+//
+// Example:
+//
+//	svc := New(db, DBTypeSQLite, logger, true)
 func New(db *sql.DB, dbType DBType, logger logr.Logger, sessionInMemory bool) *Services {
 	svc := &Services{
 		db:     db,

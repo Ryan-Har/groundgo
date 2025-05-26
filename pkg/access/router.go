@@ -6,9 +6,8 @@ import (
 	"strings"
 )
 
-// Router defines the minimal interface required for a router
-// to register HTTP handlers by pattern.
-// can be used with Enforcer by implementing this interface.
+// Router defines an abstraction for registering routes and applying middleware.
+// It allows Enforcer to remain decoupled from specific HTTP frameworks.
 type Router interface {
 	Handle(pattern string, handler http.Handler)
 }

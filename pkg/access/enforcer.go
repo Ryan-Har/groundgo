@@ -12,6 +12,9 @@ import (
 	"github.com/go-logr/logr"
 )
 
+// Enforcer manages access control policies and wraps route handlers with
+// authentication and authorization logic. It is typically used to guard routes
+// based on roles defined in the Policies map.
 type Enforcer struct {
 	logger   logr.Logger
 	Policies map[string]map[string]models.Role  // e.g route: {Get: RoleUser, Post: RoleAdmin}
@@ -21,6 +24,26 @@ type Enforcer struct {
 	session  sessionstore.Store
 }
 
+// NewEnforcer initializes and returns a new Enforcer instance.
+//
+// The Enforcer manages route access policies and wraps HTTP handlers
+// with authentication and authorization logic. It maintains a mapping of
+// allowed roles per HTTP method and path, and handles enforcement
+// through middleware integration with the provided router.
+//
+// Params:
+//   - logger: a logr.Logger for structured logging
+//   - router: an implementation of the Router interface used to register and manage routes
+//   - auth: an authentication store used to validate user credentials
+//   - sess: a session store used to persist user sessions
+//
+// The Enforcer initializes with:
+//   - An empty Policies map: policies can be added dynamically to control route access
+//   - Internal handler mapping used to wrap and manage protected routes
+//
+// Example:
+//
+//	enforcer := NewEnforcer(logger, router, authStore, sessionStore)
 func NewEnforcer(logger logr.Logger, router Router, auth authstore.Store, sess sessionstore.Store) *Enforcer {
 	return &Enforcer{
 		logger:   logger,
@@ -31,6 +54,12 @@ func NewEnforcer(logger logr.Logger, router Router, auth authstore.Store, sess s
 	}
 }
 
+// LoadDefaultPolicies sets a baseline set of access control rules for common
+// public routes like login, signup, and the home page.
+//
+// These policies grant access to unauthenticated (guest) users and are
+// typically called during application startup before any custom policies
+// are added.
 func (e *Enforcer) LoadDefaultPolicies() {
 	e.SetPolicy("/login", "GET", models.RoleGuest)
 	e.SetPolicy("/login", "POST", models.RoleGuest)
