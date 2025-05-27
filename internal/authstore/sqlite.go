@@ -51,10 +51,12 @@ func (s *sqliteAuthStore) CreateUser(ctx context.Context, args models.CreateUser
 	defer s.newTimingLogger(time.Now(), "executed sql query", "method", "CreateUser", "args", map[string]any{"email": args.Email, "role": args.Role})()
 
 	// set the root to the provided role
-	if len(args.Claims) <= 0 && args.Role != "" {
-		args.Claims = models.Claims{
-			"/": models.Role(args.Role),
-		}
+	if args.Role.IsValid() {
+		args.Claims.AddRole("/", models.Role(args.Role))
+	} else {
+		err := errors.New("invalid role provided")
+		s.log.Error(err, "creating user")
+		return models.User{}, err
 	}
 
 	params, err := transform.ToSQLiteCreateUserParams(args)

@@ -65,7 +65,7 @@ func ToSQLiteUser(args models.User) (sqliteDB.User, error) {
 func ToSQLiteCreateUserParams(args models.CreateUserParams) (sqliteDB.CreateUserParams, error) {
 	params := sqliteDB.CreateUserParams{
 		Email:         args.Email,
-		Role:          args.Role,
+		Role:          args.Role.String(),
 		OauthProvider: args.OauthProvider,
 		OauthID:       args.OauthID,
 	}

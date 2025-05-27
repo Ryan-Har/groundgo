@@ -9,7 +9,7 @@ import (
 type CreateUserParams struct {
 	Email         string  `json:"email"`
 	Password      *string `json:"password"`
-	Role          string  `json:"role"`
+	Role          Role    `json:"role"`
 	Claims        Claims  `json:"claims"`
 	OauthProvider *string `json:"oauthProvider"`
 	OauthID       *string `json:"oauthId"`
