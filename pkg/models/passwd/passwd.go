@@ -28,11 +28,15 @@ func HashPassword(password string) (string, error) {
 	return string(hashedBytes), nil
 }
 
+// CheckPasswordHash compares a plaintext password with a bcrypt hashed password.
+// Returns true if they match, false otherwise.
 func CheckPasswordHash(password, hash string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 	return err == nil
 }
 
+// Authenticate verifies whether the input password matches the stored bcrypt hash.
+// Returns true if authentication is successful.
 func Authenticate(inputPassword, storedHash string) bool {
 	return CheckPasswordHash(inputPassword, storedHash)
 }

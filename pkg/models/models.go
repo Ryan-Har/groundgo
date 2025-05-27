@@ -27,3 +27,12 @@ type User struct {
 	UpdatedAt     time.Time `json:"updatedAt"`
 	IsActive      bool      `json:"isActive"`
 }
+
+func (u *User) EnsureRootClaim() {
+	u.Claims.AddRole("/", u.Role)
+}
+
+type UserOAuthParams struct {
+	OauthProvider string `json:"oauthProvider"`
+	OauthID       string `json:"oauthId"`
+}

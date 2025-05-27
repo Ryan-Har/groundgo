@@ -112,3 +112,19 @@ func ParseClaims(claimsJSON *string) (models.Claims, error) {
 
 	return claims, nil
 }
+
+func ToGetUserByOAuthParams(args models.UserOAuthParams) sqliteDB.GetUserByOAuthParams {
+	var providerPtr, idPtr *string
+
+	if args.OauthProvider != "" {
+		providerPtr = &args.OauthProvider
+	}
+	if args.OauthID != "" {
+		idPtr = &args.OauthID
+	}
+
+	return sqliteDB.GetUserByOAuthParams{
+		OauthProvider: providerPtr,
+		OauthID:       idPtr,
+	}
+}

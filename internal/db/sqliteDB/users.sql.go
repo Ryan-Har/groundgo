@@ -359,3 +359,24 @@ func (q *Queries) UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) 
 	_, err := q.db.ExecContext(ctx, updateUserRole, arg.Role, arg.ID)
 	return err
 }
+
+const updateUserRoleAndClaims = `-- name: UpdateUserRoleAndClaims :exec
+UPDATE users
+SET role = ?, 
+    claims = ?, 
+    updated_at = STRFTIME('%s', 'NOW')
+WHERE id = ?
+`
+
+type UpdateUserRoleAndClaimsParams struct {
+	Role   string  `json:"role"`
+	Claims *string `json:"claims"`
+	ID     string  `json:"id"`
+}
+
+// Sets a user's role,JSON claims data and updates the 'updated_at' timestamp.
+// Useful for keeping the root claim syncronized with the role
+func (q *Queries) UpdateUserRoleAndClaims(ctx context.Context, arg UpdateUserRoleAndClaimsParams) error {
+	_, err := q.db.ExecContext(ctx, updateUserRoleAndClaims, arg.Role, arg.Claims, arg.ID)
+	return err
+}

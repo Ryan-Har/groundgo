@@ -156,3 +156,12 @@ FROM
     users
 ORDER BY
     created_at DESC;
+
+-- name: UpdateUserRoleAndClaims :exec
+-- Sets a user's role,JSON claims data and updates the 'updated_at' timestamp.
+-- Useful for keeping the root claim syncronized with the role
+UPDATE users
+SET role = ?, 
+    claims = ?, 
+    updated_at = STRFTIME('%s', 'NOW')
+WHERE id = ?;

@@ -64,7 +64,7 @@ func (e *Enforcer) AuthenticationMiddleware(next http.Handler) http.Handler {
 				e.logger.Error(err, "getting user by id")
 				http.Redirect(w, r, "/login", http.StatusInternalServerError)
 			}
-			authUser = user
+			authUser = *user
 			isAuthenticated = true
 		}
 

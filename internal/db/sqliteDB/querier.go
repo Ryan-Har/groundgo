@@ -37,6 +37,9 @@ type Querier interface {
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 	// Updates a user's role and updates the 'updated_at' timestamp.
 	UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) error
+	// Sets a user's role,JSON claims data and updates the 'updated_at' timestamp.
+	// Useful for keeping the root claim syncronized with the role
+	UpdateUserRoleAndClaims(ctx context.Context, arg UpdateUserRoleAndClaimsParams) error
 }
 
 var _ Querier = (*Queries)(nil)
