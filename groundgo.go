@@ -192,6 +192,7 @@ func (g *GroundGo) SetDefaultRoutes() {
 			Email:    email,
 			Password: &password,
 			Role:     "user",
+			Claims:   models.Claims{},
 		})
 		if err != nil {
 			if err := templates.SignupError("Unable to create user, please try again later.").Render(r.Context(), w); err != nil {
@@ -215,5 +216,18 @@ func (g *GroundGo) SetDefaultRoutes() {
 
 		w.Header().Set("HX-Redirect", "/")
 		w.WriteHeader(http.StatusOK)
+	})
+
+	g.Enforcer.HandleFunc("GET /admin", func(w http.ResponseWriter, r *http.Request) {
+		users, err := g.Services.Auth.ListAllUsers(r.Context())
+		if err != nil {
+			g.logger.Error(err, "unable to list users")
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		content := templates.AdminPage(users)
+		if err := templates.Layout("Admin", content).Render(r.Context(), w); err != nil {
+			g.logger.Error(err, "unable to GET /admin")
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	})
 }
