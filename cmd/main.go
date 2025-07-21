@@ -7,7 +7,6 @@ import (
 	"os"
 
 	"github.com/Ryan-Har/groundgo"
-	"github.com/Ryan-Har/groundgo/pkg/models"
 	"github.com/go-logr/logr"
 )
 
@@ -45,10 +44,10 @@ func main() {
 		w.Write([]byte("Hello from the main application root!"))
 	})
 	gg.SetDefaultRoutes()
-	gg.Enforcer.SetPolicy("/admin", "*", models.RoleAdmin)
-	gg.Enforcer.HandleFunc("GET /admin", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Hello from the main application admin page!"))
-	})
+	//gg.Enforcer.SetPolicy("/admin", "*", models.RoleAdmin)
+	// gg.Enforcer.HandleFunc("GET /admin", func(w http.ResponseWriter, r *http.Request) {
+	// 	w.Write([]byte("Hello from the main application admin page!"))
+	// })
 
 	// now load any additional routed however you like
 	// uses the same mux but doesn't include the enforcer

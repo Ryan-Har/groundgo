@@ -1,0 +1,409 @@
+package templates
+
+import (
+	"fmt"
+	"github.com/Ryan-Har/groundgo/pkg/models"
+	"time"
+)
+
+templ AdminPage(users []*models.User) {
+	@adminStyle()
+	<div class="container is-fluid" x-data="admin">
+		@pageHeader()
+		<div class="container">
+			@pageStatistics()
+			@pageFilters()
+			@UserTable(users)
+		</div>
+	</div>
+	@alpineFunctions()
+}
+
+templ pageHeader() {
+	<div class="page-header">
+		<div class="container">
+			<div class="level">
+				<div class="level-left">
+					<div class="level-item">
+						<div>
+							<h1 class="title is-3">User Management</h1>
+							<p class="subtitle is-6">
+								Manage users and their permissions
+							</p>
+						</div>
+					</div>
+				</div>
+				<div class="level-right">
+					<div class="level-item">
+						<button class="button is-primary">
+							<span class="icon">
+								<i class="fas fa-plus"></i>
+							</span>
+							<span>Add User</span>
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+}
+
+templ pageStatistics() {
+	<div class="columns is-multiline mb-5">
+		<div class="column is-3">
+			<div class="stats-card">
+				<div class="level">
+					<div class="level-left">
+						<div class="level-item">
+							<div>
+								<p class="heading">Total Users</p>
+								<p class="title is-4">1,247</p>
+							</div>
+						</div>
+					</div>
+					<div class="level-right">
+						<div class="level-item">
+							<span class="icon is-large has-text-primary">
+								<i class="fas fa-users fa-2x"></i>
+							</span>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+		<div class="column is-3">
+			<div class="stats-card">
+				<div class="level">
+					<div class="level-left">
+						<div class="level-item">
+							<div>
+								<p class="heading">Active Users</p>
+								<p class="title is-4">1,156</p>
+							</div>
+						</div>
+					</div>
+					<div class="level-right">
+						<div class="level-item">
+							<span class="icon is-large has-text-success">
+								<i class="fas fa-user-check fa-2x"></i>
+							</span>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+		<div class="column is-3">
+			<div class="stats-card">
+				<div class="level">
+					<div class="level-left">
+						<div class="level-item">
+							<div>
+								<p class="heading">Inactive Users</p>
+								<p class="title is-4">91</p>
+							</div>
+						</div>
+					</div>
+					<div class="level-right">
+						<div class="level-item">
+							<span class="icon is-large has-text-warning">
+								<i class="fas fa-user-clock fa-2x"></i>
+							</span>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+		<div class="column is-3">
+			<div class="stats-card">
+				<div class="level">
+					<div class="level-left">
+						<div class="level-item">
+							<div>
+								<p class="heading">Admin Users</p>
+								<p class="title is-4">12</p>
+							</div>
+						</div>
+					</div>
+					<div class="level-right">
+						<div class="level-item">
+							<span class="icon is-large has-text-danger">
+								<i class="fas fa-user-shield fa-2x"></i>
+							</span>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+}
+
+templ pageFilters() {
+	<div class="box mb-5 filter-box">
+		<div class="columns">
+			<div class="column is-4">
+				<div class="field">
+					<label class="label">Search Users</label>
+					<div class="control has-icons-left">
+						<input
+							class="input"
+							type="text"
+							placeholder="Search by name or email..."
+						/>
+						<span class="icon is-small is-left">
+							<i class="fas fa-search"></i>
+						</span>
+					</div>
+				</div>
+			</div>
+			<div class="column is-3">
+				<div class="field">
+					<label class="label">Status</label>
+					<div class="control">
+						<div class="select is-fullwidth">
+							<select>
+								<option>All Status</option>
+								<option>Active</option>
+								<option>Inactive</option>
+								<option>Pending</option>
+							</select>
+						</div>
+					</div>
+				</div>
+			</div>
+			<div class="column is-3">
+				<div class="field">
+					<label class="label">Claims</label>
+					<div class="control">
+						<div class="select is-fullwidth">
+							<select>
+								<option>All Claims</option>
+								<option>user.read</option>
+								<option>user.write</option>
+								<option>admin.full</option>
+								<option>reports.view</option>
+								<option>billing.manage</option>
+							</select>
+						</div>
+					</div>
+				</div>
+			</div>
+			<div class="column is-2">
+				<div class="field">
+					<label class="label">&nbsp;</label>
+					<div class="control">
+						<button class="button is-link is-fullwidth">
+							<span class="icon">
+								<i class="fas fa-filter"></i>
+							</span>
+							<span>Filter</span>
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+}
+
+templ UserTable(users []*models.User) {
+	<div class="table-container">
+		<table class="table is-fullwidth is-hoverable">
+			@tableHeader()
+			<tbody>
+				for _, user := range users {
+					@userRow(user)
+				}
+			</tbody>
+		</table>
+	</div>
+	//temp
+	<table class="table is-striped is-fullwidth">
+		<thead>
+			<tr>
+				<th>Email</th>
+				<th>Claims</th>
+				<th>Actions</th>
+			</tr>
+		</thead>
+		<tbody>
+			for _, _ = range users {
+				<tr>
+					<td>
+						user email
+					</td>
+					<td>
+						user claims
+					</td>
+					<td>
+						<div class="buttons are-small">
+							<button
+								class="button is-info"
+								hx-post="/reset-password"
+								hx-vals='{"id":"@user.ID"}'
+								hx-swap="none"
+							>
+								Reset Password
+							</button>
+							<button
+								class="button is-danger"
+								hx-post="/delete-user"
+								hx-vals='{"id":"@user.ID"}'
+								hx-target="#user-table"
+								hx-swap="outerHTML"
+							>
+								Delete
+							</button>
+						</div>
+					</td>
+				</tr>
+			}
+		</tbody>
+	</table>
+}
+
+templ tableHeader() {
+	<thead>
+		<tr>
+			<th>
+				<label class="checkbox">
+					<input type="checkbox"/>
+				</label>
+			</th>
+			<th>User</th>
+			<th>Status</th>
+			<th>Claims</th>
+			<th>Last Update</th>
+			<th>Created</th>
+		</tr>
+	</thead>
+}
+
+templ userRow(user *models.User) {
+	<tr>
+		<td>
+			<label class="checkbox">
+				<input type="checkbox"/>
+			</label>
+		</td>
+		<td>
+			<div class="block">
+				<p class="is-size-6 has-text-weight-semibold">{ user.Email }</p>
+				<p class="is-size-7 has-text-grey">
+					{ user.Email }
+				</p>
+			</div>
+		</td>
+		<td>
+			<span class="tag is-success">Active</span>
+		</td>
+		<td>
+			<div class="claims-list">
+				for claim, perm := range user.Claims {
+					<span class="tag claim-tag">{ fmt.Sprintf("%s.%s", claim, perm.String()) }</span>
+				}
+			</div>
+		</td>
+		<td>
+			<span class="has-text-grey-dark" x-text={ fmt.Sprintf("timeUtils.formatTime('%s')", user.CreatedAt.Format(time.RFC3339)) }>Loading...</span>
+		</td>
+		<td>
+			<span class="has-text-grey-dark" x-text={ fmt.Sprintf("timeUtils.formatTime('%s')", user.CreatedAt.Format(time.RFC3339)) }>Loading...</span>
+		</td>
+	</tr>
+}
+
+templ adminStyle() {
+	<style>
+      .claims-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25rem;
+        margin-top: 0.5rem;
+      }
+      .claim-tag {
+        font-size: 0.75rem;
+      }
+      .user-actions {
+        white-space: nowrap;
+      }
+      .table-container {
+        background: white;
+        border-radius: 6px;
+        box-shadow: 0 0.5em 1em -0.125em rgba(10, 10, 10, 0.1);
+      }
+      .page-header {
+        border-bottom: 1px solid #dbdbdb;
+        padding: 1.5rem 0;
+        margin-bottom: 2rem;
+      }
+
+	  .stats-card {
+		border-radius: 6px;
+		box-shadow: 0 0.5em 1em -0.125em rgba(10, 10, 10, 0.1);
+		padding: 1.5rem;
+		background-color: #ffffff; /* default light */
+		}
+
+		/* Dark mode overrides */
+		@media (prefers-color-scheme: dark) {
+		.stats-card {
+			background-color: #1e1e1e; /* surface color */
+			border: 1px solid rgba(255, 255, 255, 0.05);
+			box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6),
+						0 0 0 1px rgba(255, 255, 255, 0.04);
+		}
+		.stats-card:hover {
+			background-color: #262626;
+			box-shadow: 0 4px 8px rgba(0, 0, 0, 0.7),
+						0 0 0 1px rgba(255, 255, 255, 0.08);
+		}
+		.filter-box {
+			background-color: #1e1e1e; /* surface color */
+			border: 1px solid rgba(255, 255, 255, 0.05);
+			box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6),
+						0 0 0 1px rgba(255, 255, 255, 0.04);
+		}
+	}
+
+    </style>
+}
+
+//TODO
+templ pagination() {
+	<nav
+		class="pagination is-centered mt-5"
+		role="navigation"
+		aria-label="pagination"
+	>
+		<a class="pagination-previous" disabled>Previous</a>
+		<a class="pagination-next">Next page</a>
+		<ul class="pagination-list">
+			<li><a class="pagination-link is-current">1</a></li>
+			<li><a class="pagination-link">2</a></li>
+			<li><a class="pagination-link">3</a></li>
+			<li><span class="pagination-ellipsis">&hellip;</span></li>
+			<li><a class="pagination-link">47</a></li>
+		</ul>
+	</nav>
+}
+
+templ alpineFunctions() {
+	<script>
+	document.addEventListener('alpine:init', () => {
+	Alpine.data('admin', () => ({
+		// timeUtils object holds all time related utilities
+		timeUtils: {
+			formatTime(isoString) {
+				if (!isoString) return 'ERR time format'
+				const date = new Date(isoString);
+				const now = new Date();
+				const diffHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
+				if (diffHours < 1) return `less than an hour ago`
+				if (diffHours < 72) return `${Math.round(diffHours)} hours ago`;
+				return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+			}
+		},
+
+	}))
+	})
+	</script>
+}
