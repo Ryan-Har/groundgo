@@ -54,20 +54,6 @@ func NewEnforcer(logger logr.Logger, router Router, auth authstore.Store, sess s
 	}
 }
 
-// LoadDefaultPolicies sets a baseline set of access control rules for common
-// public routes like login, signup, and the home page.
-//
-// These policies grant access to unauthenticated (guest) users and are
-// typically called during application startup before any custom policies
-// are added.
-func (e *Enforcer) LoadDefaultPolicies() {
-	e.SetPolicy("/login", "GET", models.RoleGuest)
-	e.SetPolicy("/login", "POST", models.RoleGuest)
-	e.SetPolicy("/signup", "GET", models.RoleGuest)
-	e.SetPolicy("/signup", "POST", models.RoleGuest)
-	e.SetPolicy("/", "GET", models.RoleGuest)
-}
-
 // SetPolicy allows defining the minimum required role for a given resource path and HTTP method.
 // Use "*" as the method to apply the policy to all methods for that path.
 func (e *Enforcer) SetPolicy(resourcePath string, method string, requiredRole models.Role) {

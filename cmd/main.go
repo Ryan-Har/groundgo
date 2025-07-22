@@ -43,7 +43,7 @@ func main() {
 	gg.Enforcer.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Hello from the main application root!"))
 	})
-	gg.SetDefaultRoutes()
+	gg.Enforcer.LoadDefaultRoutes()
 	//gg.Enforcer.SetPolicy("/admin", "*", models.RoleAdmin)
 	// gg.Enforcer.HandleFunc("GET /admin", func(w http.ResponseWriter, r *http.Request) {
 	// 	w.Write([]byte("Hello from the main application admin page!"))
