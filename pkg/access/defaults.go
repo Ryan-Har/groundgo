@@ -1,6 +1,7 @@
 package access
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -260,18 +261,32 @@ func (e *Enforcer) SetDefaultAdminRoute() {
 			claims[resource] = role
 		}
 
+		// get a copy of the user model before the update for comparison, to update state if neccessary
+		var beforeUpdateUser *models.User
+		if _, exists := claims["/"]; exists {
+			beforeUpdateUser, err = e.auth.GetUserByID(r.Context(), usrID)
+			if err != nil {
+				e.logger.Error(err, "unable to list user with uuid", "uuid", usrID.String())
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+
 		if err := e.auth.UpdateUserClaims(r.Context(), usrID, claims); err != nil {
 			e.logger.Error(err, "unable to update user claim")
 		}
 
-		user, err := e.auth.GetUserByID(r.Context(), usrID)
+		afterUpdateUser, err := e.auth.GetUserByID(r.Context(), usrID)
 		if err != nil {
 			e.logger.Error(err, "unable to list user with uuid", "uuid", usrID.String())
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		if err := templates.UserRow(user).Render(r.Context(), w); err != nil {
+		statsUpdateHeader := fmt.Sprintf(`{"update-stats":{"admin":%d}}`, adminCountDelta(beforeUpdateUser, afterUpdateUser))
+		w.Header().Set("HX-Trigger", statsUpdateHeader)
+
+		if err := templates.UserRow(afterUpdateUser).Render(r.Context(), w); err != nil {
 			e.logger.Error(err, "unable to render UserRowPartial")
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -287,11 +302,36 @@ func (e *Enforcer) SetDefaultAdminRoute() {
 			http.Error(w, "unable to parse provided id into uuid", http.StatusBadRequest)
 		}
 
+		user, err := e.auth.GetUserByID(r.Context(), usrID)
+		if err != nil {
+			e.logger.Error(err, "unable to list user with uuid", "uuid", usrID.String())
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
 		// TODO: add persistent logging for This kind of thing
 		if err := e.auth.HardDeleteUser(r.Context(), usrID); err != nil {
 			e.logger.Error(err, "unable to delete user", "id", id)
 			http.Error(w, "unable to delete user", http.StatusInternalServerError)
 		}
+
+		var statsUpdateHeader string
+		switch user.IsActive {
+		case true:
+			if user.Role.AtLeast(models.RoleAdmin) {
+				statsUpdateHeader = `{"update-stats":{"total":-1,"active":-1,"admin":-1}}`
+			} else {
+				statsUpdateHeader = `{"update-stats":{"total":-1,"active":-1}}`
+			}
+		case false:
+			if user.Role.AtLeast(models.RoleAdmin) {
+				statsUpdateHeader = `{"update-stats":{"total":-1,"inactive":-1,"admin":-1}}`
+			} else {
+				statsUpdateHeader = `{"update-stats":{"total":-1,"inactive":-1}}`
+			}
+		}
+
+		w.Header().Set("HX-Trigger", statsUpdateHeader)
 	})
 
 	// partial for disabling a single user by ID. Populates a single row in the table
@@ -315,6 +355,9 @@ func (e *Enforcer) SetDefaultAdminRoute() {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+
+		statsUpdateHeader := `{"update-stats":{"active":-1,"inactive":1}}`
+		w.Header().Set("HX-Trigger", statsUpdateHeader)
 
 		if err := templates.UserRow(user).Render(r.Context(), w); err != nil {
 			e.logger.Error(err, "unable to render UserRowPartial")
@@ -345,10 +388,45 @@ func (e *Enforcer) SetDefaultAdminRoute() {
 			return
 		}
 
+		statsUpdateHeader := `{"update-stats":{"active":1,"inactive":-1}}`
+		w.Header().Set("HX-Trigger", statsUpdateHeader)
+
 		if err := templates.UserRow(user).Render(r.Context(), w); err != nil {
 			e.logger.Error(err, "unable to render UserRowPartial")
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 	})
+}
+
+// adminCountDelta compares the roles of beforeUpdateUser and afterUpdateUser
+// and determines if the admin user count should be adjusted.
+//
+// Returns:
+// - +1 if the user's role was promoted from below admin to admin or higher (increment admin count)
+// - -1 if the user's role was demoted from admin or higher to below admin (decrement admin count)
+// - 0 if no change to admin status or if beforeUpdateUser is nil
+//
+// Parameters:
+// - beforeUpdateUser: pointer to the User before update; may be nil if no prior data
+// - afterUpdateUser: pointer to the User after update; assumed non-nil
+func adminCountDelta(beforeUpdateUser, afterUpdateUser *models.User) int {
+	// No change if before is nil (e.g. new user or missing claim)
+	if beforeUpdateUser == nil {
+		return 0
+	}
+
+	wasAdmin := beforeUpdateUser.Role.AtLeast(models.RoleAdmin)
+	isAdmin := afterUpdateUser.Role.AtLeast(models.RoleAdmin)
+
+	switch {
+	case !wasAdmin && isAdmin:
+		// Role went from below admin to admin or higher
+		return +1
+	case wasAdmin && !isAdmin:
+		// Role went from admin or higher to below admin
+		return -1
+	default:
+		return 0
+	}
 }

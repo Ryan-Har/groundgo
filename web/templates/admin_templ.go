@@ -12,7 +12,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/Ryan-Har/groundgo/pkg/models"
-	"strconv"
 	"time"
 )
 
@@ -53,7 +52,7 @@ func AdminPage(users []*models.User) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = pageStatistics(statsFromUsers(users)).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = pageStatistics(pageStatisticsxData(users)).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -106,22 +105,7 @@ func pageHeader() templ.Component {
 	})
 }
 
-func statsFromUsers(users []*models.User) (total, active, inactive, admin int) {
-	for _, user := range users {
-		total++
-		if user.Claims.HasAtLeast("/", models.RoleAdmin) {
-			admin++
-		}
-		if user.IsActive {
-			active++
-		} else {
-			inactive++
-		}
-	}
-	return
-}
-
-func pageStatistics(total, active, inactive, admin int) templ.Component {
+func pageStatistics(xData string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -142,27 +126,40 @@ func pageStatistics(total, active, inactive, admin int) templ.Component {
 			templ_7745c5c3_Var3 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<div class=\"columns is-multiline mb-5\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<div class=\"columns is-multiline mb-5\" x-data=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = statisticsTotalCard(total).Render(ctx, templ_7745c5c3_Buffer)
+		var templ_7745c5c3_Var4 string
+		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(xData)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 55, Col: 16}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = statisticsActiveCard(active).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "\" @update-stats.window=\"updateStats($event)\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = statisticsInactiveCard(inactive).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = statisticsTotalCard().Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = statisticsAdminCard(admin).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = statisticsActiveCard().Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</div>")
+		templ_7745c5c3_Err = statisticsInactiveCard().Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = statisticsAdminCard().Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -170,7 +167,53 @@ func pageStatistics(total, active, inactive, admin int) templ.Component {
 	})
 }
 
-func statisticsTotalCard(number int) templ.Component {
+// pageStatisticsxData formats the x-data for the statistics component
+func pageStatisticsxData(users []*models.User) string {
+	var total, active, inactive, admin int
+	for _, user := range users {
+		total++
+		if user.Claims.HasAtLeast("/", models.RoleAdmin) {
+			admin++
+		}
+		if user.IsActive {
+			active++
+		} else {
+			inactive++
+		}
+	}
+
+	return fmt.Sprintf(`{
+        stats: {
+            total: %d,
+            active: %d,
+            inactive: %d,
+            admin: %d
+        },
+        flashing: {
+            total: false,
+            active: false,
+            inactive: false,
+            admin: false    
+        },
+        updateStats(event) {
+            const updates = event.detail;
+            for (const key in updates) {
+                if (this.stats.hasOwnProperty(key)) {
+                    this.stats[key] += updates[key];
+                    this.flashStat(key);
+                }
+            }
+        },
+        flashStat(statKey) {
+            this.flashing[statKey] = true;
+            setTimeout(() => {
+                this.flashing[statKey] = false;
+            }, 1000);   
+        }
+    }`, total, active, inactive, admin)
+}
+
+func statisticsTotalCard() templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -186,25 +229,12 @@ func statisticsTotalCard(number int) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var4 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var4 == nil {
-			templ_7745c5c3_Var4 = templ.NopComponent
+		templ_7745c5c3_Var5 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var5 == nil {
+			templ_7745c5c3_Var5 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<div class=\"column is-3\"><div class=\"stats-card\"><div class=\"level\"><div class=\"level-left\"><div class=\"level-item\"><div><p class=\"heading\">Total Users</p><p class=\"title is-4\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var5 string
-		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(number))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 85, Col: 51}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</p></div></div></div><div class=\"level-right\"><div class=\"level-item\"><span class=\"icon is-large has-text-primary\"><i class=\"fas fa-users fa-2x\"></i></span></div></div></div></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<div class=\"column is-3\"><div class=\"stats-card\" :class=\"{ flash: flashing.total }\"><div class=\"level\"><div class=\"level-left\"><div class=\"level-item\"><div><p class=\"heading\">Total Users</p><p class=\"title is-4\" x-text=\"stats.total\"></p></div></div></div><div class=\"level-right\"><div class=\"level-item\"><span class=\"icon is-large has-text-primary\"><i class=\"fas fa-users fa-2x\"></i></span></div></div></div></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -212,7 +242,7 @@ func statisticsTotalCard(number int) templ.Component {
 	})
 }
 
-func statisticsActiveCard(number int) templ.Component {
+func statisticsActiveCard() templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -233,20 +263,7 @@ func statisticsActiveCard(number int) templ.Component {
 			templ_7745c5c3_Var6 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<div class=\"column is-3\"><div class=\"stats-card\"><div class=\"level\"><div class=\"level-left\"><div class=\"level-item\"><div><p class=\"heading\">Active Users</p><p class=\"title is-4\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var7 string
-		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(number))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 109, Col: 51}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</p></div></div></div><div class=\"level-right\"><div class=\"level-item\"><span class=\"icon is-large has-text-success\"><i class=\"fas fa-user-check fa-2x\"></i></span></div></div></div></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<div class=\"column is-3\"><div class=\"stats-card\" :class=\"{ flash: flashing.active }\"><div class=\"level\"><div class=\"level-left\"><div class=\"level-item\"><div><p class=\"heading\">Active Users</p><p class=\"title is-4\" x-text=\"stats.active\"></p></div></div></div><div class=\"level-right\"><div class=\"level-item\"><span class=\"icon is-large has-text-success\"><i class=\"fas fa-user-check fa-2x\"></i></span></div></div></div></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -254,7 +271,36 @@ func statisticsActiveCard(number int) templ.Component {
 	})
 }
 
-func statisticsInactiveCard(number int) templ.Component {
+func statisticsInactiveCard() templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var7 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var7 == nil {
+			templ_7745c5c3_Var7 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<div class=\"column is-3\"><div class=\"stats-card\" :class=\"{ flash: flashing.inactive }\"><div class=\"level\"><div class=\"level-left\"><div class=\"level-item\"><div><p class=\"heading\">Inactive Users</p><p class=\"title is-4\" x-text=\"stats.inactive\"></p></div></div></div><div class=\"level-right\"><div class=\"level-item\"><span class=\"icon is-large has-text-warning\"><i class=\"fas fa-user-clock fa-2x\"></i></span></div></div></div></div></div>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
+}
+
+func statisticsAdminCard() templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -275,62 +321,7 @@ func statisticsInactiveCard(number int) templ.Component {
 			templ_7745c5c3_Var8 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<div class=\"column is-3\"><div class=\"stats-card\"><div class=\"level\"><div class=\"level-left\"><div class=\"level-item\"><div><p class=\"heading\">Inactive Users</p><p class=\"title is-4\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var9 string
-		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(number))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 133, Col: 51}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</p></div></div></div><div class=\"level-right\"><div class=\"level-item\"><span class=\"icon is-large has-text-warning\"><i class=\"fas fa-user-clock fa-2x\"></i></span></div></div></div></div></div>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		return nil
-	})
-}
-
-func statisticsAdminCard(number int) templ.Component {
-	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
-		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
-		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
-			return templ_7745c5c3_CtxErr
-		}
-		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
-		if !templ_7745c5c3_IsBuffer {
-			defer func() {
-				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
-				if templ_7745c5c3_Err == nil {
-					templ_7745c5c3_Err = templ_7745c5c3_BufErr
-				}
-			}()
-		}
-		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var10 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var10 == nil {
-			templ_7745c5c3_Var10 = templ.NopComponent
-		}
-		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "<div class=\"column is-3\"><div class=\"stats-card\"><div class=\"level\"><div class=\"level-left\"><div class=\"level-item\"><div><p class=\"heading\">Admin Users</p><p class=\"title is-4\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var11 string
-		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(number))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 157, Col: 51}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</p></div></div></div><div class=\"level-right\"><div class=\"level-item\"><span class=\"icon is-large has-text-danger\"><i class=\"fas fa-user-shield fa-2x\"></i></span></div></div></div></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<div class=\"column is-3\"><div class=\"stats-card\" :class=\"{ flash: flashing.admin }\"><div class=\"level\"><div class=\"level-left\"><div class=\"level-item\"><div><p class=\"heading\">Admin Users</p><p class=\"title is-4\" x-text=\"stats.admin\"></p></div></div></div><div class=\"level-right\"><div class=\"level-item\"><span class=\"icon is-large has-text-danger\"><i class=\"fas fa-user-shield fa-2x\"></i></span></div></div></div></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -354,12 +345,12 @@ func pageFilters() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var12 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var12 == nil {
-			templ_7745c5c3_Var12 = templ.NopComponent
+		templ_7745c5c3_Var9 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var9 == nil {
+			templ_7745c5c3_Var9 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "<div class=\"box mb-5 filter-box\"><div class=\"columns\"><div class=\"column is-4\"><div class=\"field\"><label class=\"label\">Search Users</label><div class=\"control has-icons-left\"><input class=\"input\" type=\"text\" placeholder=\"Search by name or email...\"> <span class=\"icon is-small is-left\"><i class=\"fas fa-search\"></i></span></div></div></div><div class=\"column is-3\"><div class=\"field\"><label class=\"label\">Status</label><div class=\"control\"><div class=\"select is-fullwidth\"><select><option>All Status</option> <option>Active</option> <option>Inactive</option> <option>Pending</option></select></div></div></div></div><div class=\"column is-3\"><div class=\"field\"><label class=\"label\">Claims</label><div class=\"control\"><div class=\"select is-fullwidth\"><select><option>All Claims</option> <option>user.read</option> <option>user.write</option> <option>admin.full</option> <option>reports.view</option> <option>billing.manage</option></select></div></div></div></div><div class=\"column is-2\"><div class=\"field\"><label class=\"label\">&nbsp;</label><div class=\"control\"><button class=\"button is-link is-fullwidth\"><span class=\"icon\"><i class=\"fas fa-filter\"></i></span> <span>Filter</span></button></div></div></div></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<div class=\"box mb-5 filter-box\"><div class=\"columns\"><div class=\"column is-4\"><div class=\"field\"><label class=\"label\">Search Users</label><div class=\"control has-icons-left\"><input class=\"input\" type=\"text\" placeholder=\"Search by name or email...\"> <span class=\"icon is-small is-left\"><i class=\"fas fa-search\"></i></span></div></div></div><div class=\"column is-3\"><div class=\"field\"><label class=\"label\">Status</label><div class=\"control\"><div class=\"select is-fullwidth\"><select><option>All Status</option> <option>Active</option> <option>Inactive</option> <option>Pending</option></select></div></div></div></div><div class=\"column is-3\"><div class=\"field\"><label class=\"label\">Claims</label><div class=\"control\"><div class=\"select is-fullwidth\"><select><option>All Claims</option> <option>user.read</option> <option>user.write</option> <option>admin.full</option> <option>reports.view</option> <option>billing.manage</option></select></div></div></div></div><div class=\"column is-2\"><div class=\"field\"><label class=\"label\">&nbsp;</label><div class=\"control\"><button class=\"button is-link is-fullwidth\"><span class=\"icon\"><i class=\"fas fa-filter\"></i></span> <span>Filter</span></button></div></div></div></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -383,12 +374,12 @@ func UserTable(users []*models.User) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var13 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var13 == nil {
-			templ_7745c5c3_Var13 = templ.NopComponent
+		templ_7745c5c3_Var10 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var10 == nil {
+			templ_7745c5c3_Var10 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<div class=\"table-container\"><table class=\"table is-fullwidth is-hoverable\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "<div class=\"table-container\"><table class=\"table is-fullwidth is-hoverable\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -396,7 +387,7 @@ func UserTable(users []*models.User) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<tbody>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "<tbody>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -406,7 +397,7 @@ func UserTable(users []*models.User) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "</tbody></table></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</tbody></table></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -430,12 +421,12 @@ func tableHeader() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var14 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var14 == nil {
-			templ_7745c5c3_Var14 = templ.NopComponent
+		templ_7745c5c3_Var11 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var11 == nil {
+			templ_7745c5c3_Var11 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "<thead><tr><th><label class=\"checkbox\"><input type=\"checkbox\"></label></th><th>User</th><th>Status</th><th>Claims</th><th>Last Update</th><th>Created</th></tr></thead>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<thead><tr><th><label class=\"checkbox\"><input type=\"checkbox\"></label></th><th>User</th><th>Status</th><th>Claims</th><th>Last Update</th><th>Created</th></tr></thead>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -459,115 +450,115 @@ func UserRow(user *models.User) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var15 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var15 == nil {
-			templ_7745c5c3_Var15 = templ.NopComponent
+		templ_7745c5c3_Var12 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var12 == nil {
+			templ_7745c5c3_Var12 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "<tr hx-get=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<tr hx-get=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var16 string
-		templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("/admin/users/%s/edit-row", user.ID.String()))
+		var templ_7745c5c3_Var13 string
+		templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("/admin/users/%s/edit-row", user.ID.String()))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 272, Col: 68}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 306, Col: 68}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "\" hx-target=\"this\" hx-swap=\"outerHTML\" class=\"user-row\"><td><label class=\"checkbox\"><input type=\"checkbox\" @click.stop></label></td><td><div class=\"block\"><p class=\"is-size-6 has-text-weight-semibold\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "\" hx-target=\"this\" hx-swap=\"outerHTML\" class=\"user-row\"><td><label class=\"checkbox\"><input type=\"checkbox\" @click.stop></label></td><td><div class=\"block\"><p class=\"is-size-6 has-text-weight-semibold\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var14 string
+		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(user.Email)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 318, Col: 62}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "</p><p class=\"is-size-7 has-text-grey\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var15 string
+		templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(user.Email)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 320, Col: 17}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</p></div></td><td>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if user.IsActive {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<span class=\"tag is-success\">Active</span>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		} else {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<span class=\"tag is-warning\">Inactive</span>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "</td><td><div class=\"claims-list\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		for _, claim := range user.Claims.AsSlice() {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "<span class=\"tag claim-tag\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var16 string
+			templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(claim)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 334, Col: 40}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "</span>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "</div></td><td><span class=\"has-text-grey-dark\" x-text=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var17 string
-		templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(user.Email)
+		templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("timeUtils.formatTime('%s')", user.CreatedAt.Format(time.RFC3339)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 284, Col: 62}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 339, Col: 123}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "</p><p class=\"is-size-7 has-text-grey\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "\">Loading...</span></td><td><span class=\"has-text-grey-dark\" x-text=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var18 string
-		templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(user.Email)
+		templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("timeUtils.formatTime('%s')", user.CreatedAt.Format(time.RFC3339)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 286, Col: 17}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 342, Col: 123}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "</p></div></td><td>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if user.IsActive {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "<span class=\"tag is-success\">Active</span>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "<span class=\"tag is-warning\">Inactive</span>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "</td><td><div class=\"claims-list\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		for _, claim := range user.Claims.AsSlice() {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<span class=\"tag claim-tag\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var19 string
-			templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(claim)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 300, Col: 40}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "</span>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "</div></td><td><span class=\"has-text-grey-dark\" x-text=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var20 string
-		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("timeUtils.formatTime('%s')", user.CreatedAt.Format(time.RFC3339)))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 305, Col: 123}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "\">Loading...</span></td><td><span class=\"has-text-grey-dark\" x-text=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var21 string
-		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("timeUtils.formatTime('%s')", user.CreatedAt.Format(time.RFC3339)))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 308, Col: 123}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "\">Loading...</span></td></tr>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "\">Loading...</span></td></tr>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -591,131 +582,131 @@ func UserRowEditPartial(user *models.User) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var22 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var22 == nil {
-			templ_7745c5c3_Var22 = templ.NopComponent
+		templ_7745c5c3_Var19 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var19 == nil {
+			templ_7745c5c3_Var19 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "<tr class=\"is-selected\" x-data=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<tr class=\"is-selected\" x-data=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var20 string
+		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(UserRowEditPartialxData(user))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 350, Col: 40}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "\"><td colspan=\"6\"><div class=\"p-4\"><div class=\"field\"><label class=\"label\">Email</label><div class=\"control\"><p class=\"is-size-6 has-text-grey-light is-italic\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var21 string
+		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(user.Email)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 357, Col: 69}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "</p></div></div><!-- Warning message --><div x-show=\"showWarning\" class=\"notification is-warning is-light\" x-transition><button class=\"delete\" @click=\"showWarning = false\"></button><p x-text=\"warningMessage\"></p></div><div class=\"field\"><label class=\"label\">Current Claims</label><div class=\"field is-grouped is-grouped-multiline\"><template x-for=\"(claim, index) in claims\" :key=\"index\"><div class=\"control\"><div class=\"tags has-addons\"><span class=\"tag is-link\" x-text=\"claim\"></span> <a class=\"tag is-delete\" @click=\"removeClaim(index)\" title=\"Remove claim\"></a></div></div></template><p x-show=\"claims.length === 0\" class=\"has-text-grey-light is-italic\">No claims assigned.</p></div></div><div class=\"field\"><label class=\"label\">Add New Claim</label><div class=\"field has-addons\"><div class=\"control is-expanded\"><input class=\"input\" type=\"text\" placeholder=\"Resource (e.g., /orders/*)\" x-model=\"newClaimResource\" @keydown.enter.prevent=\"addClaim()\"></div><div class=\"control\"><span class=\"select\"><select x-model=\"newClaimRole\"><template x-for=\"role in availableRoles\" :key=\"role\"><option :value=\"role\" x-text=\"role\"></option></template></select></span></div><div class=\"control\"><button class=\"button is-info\" @click=\"addClaim()\" :disabled=\"!newClaimResource.trim()\">Add</button></div></div></div><div class=\"field is-grouped mt-5\"><div class=\"control\"><button class=\"button is-primary\" hx-put=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var22 string
+		templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("/admin/users/%s/claims", user.ID.String()))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 407, Col: 71}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "\" hx-target=\"closest tr\" hx-swap=\"outerHTML\" :hx-vals=\"JSON.stringify({ claims: claims })\">✅ Save</button></div><div class=\"control\"><button class=\"button\" hx-get=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var23 string
-		templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(UserRowEditPartialxData(user))
+		templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("/admin/users/%s", user.ID.String()))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 316, Col: 40}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 418, Col: 64}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "\"><td colspan=\"6\"><div class=\"p-4\"><div class=\"field\"><label class=\"label\">Email</label><div class=\"control\"><p class=\"is-size-6 has-text-grey-light is-italic\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "\" hx-target=\"closest tr\" hx-swap=\"outerHTML\">❌ Cancel</button></div><div class=\"control is-expanded\"></div><div class=\"control\"><button class=\"button is-light is-warning\" hx-post=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var24 string
-		templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(user.Email)
+		templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("/admin/users/%s/reset-password", user.ID.String()))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 323, Col: 69}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 429, Col: 80}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "</p></div></div><!-- Warning message --><div x-show=\"showWarning\" class=\"notification is-warning is-light\" x-transition><button class=\"delete\" @click=\"showWarning = false\"></button><p x-text=\"warningMessage\"></p></div><div class=\"field\"><label class=\"label\">Current Claims</label><div class=\"field is-grouped is-grouped-multiline\"><template x-for=\"(claim, index) in claims\" :key=\"index\"><div class=\"control\"><div class=\"tags has-addons\"><span class=\"tag is-link\" x-text=\"claim\"></span> <a class=\"tag is-delete\" @click=\"removeClaim(index)\" title=\"Remove claim\"></a></div></div></template><p x-show=\"claims.length === 0\" class=\"has-text-grey-light is-italic\">No claims assigned.</p></div></div><div class=\"field\"><label class=\"label\">Add New Claim</label><div class=\"field has-addons\"><div class=\"control is-expanded\"><input class=\"input\" type=\"text\" placeholder=\"Resource (e.g., /orders/*)\" x-model=\"newClaimResource\" @keydown.enter.prevent=\"addClaim()\"></div><div class=\"control\"><span class=\"select\"><select x-model=\"newClaimRole\"><template x-for=\"role in availableRoles\" :key=\"role\"><option :value=\"role\" x-text=\"role\"></option></template></select></span></div><div class=\"control\"><button class=\"button is-info\" @click=\"addClaim()\" :disabled=\"!newClaimResource.trim()\">Add</button></div></div></div><div class=\"field is-grouped mt-5\"><div class=\"control\"><button class=\"button is-primary\" hx-put=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "\" hx-swap=\"none\">🔑 Reset Password</button></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var25 string
-		templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("/admin/users/%s/claims", user.ID.String()))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 373, Col: 71}
+		if user.IsActive {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "<div class=\"control\"><button class=\"button is-light is-warning\" hx-post=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var25 string
+			templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("/admin/users/%s/disable", user.ID.String()))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 439, Col: 74}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "\" hx-target=\"closest tr\" hx-swap=\"outerHTML\" hx-confirm=\"Are you sure you want to disable this user?\">🚫 Disable</button></div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		} else {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "<div class=\"control\"><button class=\"button is-light is-warning\" hx-post=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var26 string
+			templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("/admin/users/%s/enable", user.ID.String()))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 451, Col: 73}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "\" hx-target=\"closest tr\" hx-swap=\"outerHTML\">🔓 Enable</button></div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "\" hx-target=\"closest tr\" hx-swap=\"outerHTML\" :hx-vals=\"JSON.stringify({ claims: claims })\">✅ Save</button></div><div class=\"control\"><button class=\"button\" hx-get=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var26 string
-		templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("/admin/users/%s", user.ID.String()))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 384, Col: 64}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "\" hx-target=\"closest tr\" hx-swap=\"outerHTML\">❌ Cancel</button></div><div class=\"control is-expanded\"></div><div class=\"control\"><button class=\"button is-light is-warning\" hx-post=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "<div class=\"control\"><button class=\"button is-danger\" hx-delete=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var27 string
-		templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("/admin/users/%s/reset-password", user.ID.String()))
+		templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("/admin/users/%s", user.ID.String()))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 395, Col: 80}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 462, Col: 67}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "\" hx-swap=\"none\">🔑 Reset Password</button></div>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if user.IsActive {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "<div class=\"control\"><button class=\"button is-light is-warning\" hx-post=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var28 string
-			templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("/admin/users/%s/disable", user.ID.String()))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 405, Col: 74}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "\" hx-target=\"closest tr\" hx-swap=\"outerHTML\" hx-confirm=\"Are you sure you want to disable this user?\">🚫 Disable</button></div>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "<div class=\"control\"><button class=\"button is-light is-warning\" hx-post=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var29 string
-			templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("/admin/users/%s/enable", user.ID.String()))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 417, Col: 73}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "\" hx-target=\"closest tr\" hx-swap=\"outerHTML\">🔓 Enable</button></div>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "<div class=\"control\"><button class=\"button is-danger\" hx-delete=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var30 string
-		templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("/admin/users/%s", user.ID.String()))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 428, Col: 67}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "\" hx-target=\"closest tr\" hx-swap=\"outerHTML\" hx-confirm=\"Are you sure you want to permanently delete this user? This action cannot be undone.\">🗑️ Delete</button></div></div></div></td></tr>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "\" hx-target=\"closest tr\" hx-swap=\"outerHTML\" hx-confirm=\"Are you sure you want to permanently delete this user? This action cannot be undone.\">🗑️ Delete</button></div></div></div></td></tr>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -803,12 +794,12 @@ func adminStyle() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var31 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var31 == nil {
-			templ_7745c5c3_Var31 = templ.NopComponent
+		templ_7745c5c3_Var28 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var28 == nil {
+			templ_7745c5c3_Var28 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "<style>\n      .claims-list {\n        display: flex;\n        flex-wrap: wrap;\n        gap: 0.25rem;\n        margin-top: 0.5rem;\n      }\n      .claim-tag {\n        font-size: 0.75rem;\n      }\n      .user-actions {\n        white-space: nowrap;\n      }\n      .table-container {\n        background: white;\n        border-radius: 6px;\n        box-shadow: 0 0.5em 1em -0.125em rgba(10, 10, 10, 0.1);\n      }\n      .page-header {\n        border-bottom: 1px solid #dbdbdb;\n        padding: 1.5rem 0;\n        margin-bottom: 2rem;\n      }\n\n\t  .stats-card {\n\t\tborder-radius: 6px;\n\t\tbox-shadow: 0 0.5em 1em -0.125em rgba(10, 10, 10, 0.1);\n\t\tpadding: 1.5rem;\n\t\tbackground-color: #ffffff; /* default light */\n\t\t}\n\n\t\t.table tr.is-selected {\n\t\tbackground-color: rgba(0, 209, 178, 0.08);\n\t\t}\n\n\t\t/* Dark mode overrides */\n\t\t@media (prefers-color-scheme: dark) {\n\t\t.stats-card {\n\t\t\tbackground-color: #1e1e1e; /* surface color */\n\t\t\tborder: 1px solid rgba(255, 255, 255, 0.05);\n\t\t\tbox-shadow: 0 2px 6px rgba(0, 0, 0, 0.6),\n\t\t\t\t\t\t0 0 0 1px rgba(255, 255, 255, 0.04);\n\t\t}\n\t\t.stats-card:hover {\n\t\t\tbackground-color: #262626;\n\t\t\tbox-shadow: 0 4px 8px rgba(0, 0, 0, 0.7),\n\t\t\t\t\t\t0 0 0 1px rgba(255, 255, 255, 0.08);\n\t\t}\n\t\t.filter-box {\n\t\t\tbackground-color: #1e1e1e; /* surface color */\n\t\t\tborder: 1px solid rgba(255, 255, 255, 0.05);\n\t\t\tbox-shadow: 0 2px 6px rgba(0, 0, 0, 0.6),\n\t\t\t\t\t\t0 0 0 1px rgba(255, 255, 255, 0.04);\n\t\t}\n\t\t.table tr.is-selected {\n\t\t\tbackground-color: rgba(0, 209, 178, 0.2);\n\t\t}\n\t}\n\n    </style>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "<style>\n      .claims-list {\n        display: flex;\n        flex-wrap: wrap;\n        gap: 0.25rem;\n        margin-top: 0.5rem;\n      }\n      .claim-tag {\n        font-size: 0.75rem;\n      }\n      .user-actions {\n        white-space: nowrap;\n      }\n      .table-container {\n        background: white;\n        border-radius: 6px;\n        box-shadow: 0 0.5em 1em -0.125em rgba(10, 10, 10, 0.1);\n      }\n      .page-header {\n        border-bottom: 1px solid #dbdbdb;\n        padding: 1.5rem 0;\n        margin-bottom: 2rem;\n      }\n\n\t  .stats-card {\n\t\tborder-radius: 6px;\n\t\tbox-shadow: 0 0.5em 1em -0.125em rgba(10, 10, 10, 0.1);\n\t\tpadding: 1.5rem;\n\t\tbackground-color: #ffffff; /* default light */\n\t\t}\n\n\t\t.table tr.is-selected {\n\t\tbackground-color: rgba(0, 209, 178, 0.08);\n\t\t}\n\n\t\t.flash {\n\t \tanimation: flash-bg 0.5s ease;\n\t\t}\n\n\t\t@keyframes flash-bg {\n\t\t0%   { background-color: #fffa8b; } /* bright yellow */\n\t\t100% { background-color: transparent; }\n\t\t}\n\n\t\t/* Dark mode overrides */\n\t\t@media (prefers-color-scheme: dark) {\n\t\t.stats-card {\n\t\t\tbackground-color: #1e1e1e; /* surface color */\n\t\t\tborder: 1px solid rgba(255, 255, 255, 0.05);\n\t\t\tbox-shadow: 0 2px 6px rgba(0, 0, 0, 0.6),\n\t\t\t\t\t\t0 0 0 1px rgba(255, 255, 255, 0.04);\n\t\t}\n\t\t.stats-card:hover {\n\t\t\tbackground-color: #262626;\n\t\t\tbox-shadow: 0 4px 8px rgba(0, 0, 0, 0.7),\n\t\t\t\t\t\t0 0 0 1px rgba(255, 255, 255, 0.08);\n\t\t}\n\t\t.filter-box {\n\t\t\tbackground-color: #1e1e1e; /* surface color */\n\t\t\tborder: 1px solid rgba(255, 255, 255, 0.05);\n\t\t\tbox-shadow: 0 2px 6px rgba(0, 0, 0, 0.6),\n\t\t\t\t\t\t0 0 0 1px rgba(255, 255, 255, 0.04);\n\t\t}\n\t\t.table tr.is-selected {\n\t\t\tbackground-color: rgba(0, 209, 178, 0.2);\n\t\t}\n\t}\n\n    </style>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -833,12 +824,12 @@ func pagination() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var32 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var32 == nil {
-			templ_7745c5c3_Var32 = templ.NopComponent
+		templ_7745c5c3_Var29 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var29 == nil {
+			templ_7745c5c3_Var29 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "<nav class=\"pagination is-centered mt-5\" role=\"navigation\" aria-label=\"pagination\"><a class=\"pagination-previous\" disabled>Previous</a> <a class=\"pagination-next\">Next page</a><ul class=\"pagination-list\"><li><a class=\"pagination-link is-current\">1</a></li><li><a class=\"pagination-link\">2</a></li><li><a class=\"pagination-link\">3</a></li><li><span class=\"pagination-ellipsis\">&hellip;</span></li><li><a class=\"pagination-link\">47</a></li></ul></nav>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "<nav class=\"pagination is-centered mt-5\" role=\"navigation\" aria-label=\"pagination\"><a class=\"pagination-previous\" disabled>Previous</a> <a class=\"pagination-next\">Next page</a><ul class=\"pagination-list\"><li><a class=\"pagination-link is-current\">1</a></li><li><a class=\"pagination-link\">2</a></li><li><a class=\"pagination-link\">3</a></li><li><span class=\"pagination-ellipsis\">&hellip;</span></li><li><a class=\"pagination-link\">47</a></li></ul></nav>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -862,12 +853,12 @@ func alpineFunctions() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var33 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var33 == nil {
-			templ_7745c5c3_Var33 = templ.NopComponent
+		templ_7745c5c3_Var30 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var30 == nil {
+			templ_7745c5c3_Var30 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "<script>\n\tdocument.addEventListener('alpine:init', () => {\n\tAlpine.data('admin', () => ({\n\t\t// timeUtils object holds all time related utilities\n\t\ttimeUtils: {\n\t\t\tformatTime(isoString) {\n\t\t\t\tif (!isoString) return 'ERR time format'\n\t\t\t\tconst date = new Date(isoString);\n\t\t\t\tconst now = new Date();\n\t\t\t\tconst diffHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);\n\t\t\t\tif (diffHours < 1) return `less than an hour ago`\n\t\t\t\tif (diffHours < 72) return `${Math.round(diffHours)} hours ago`;\n\t\t\t\treturn date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });\n\t\t\t}\n\t\t},\n\n\t}))\n\t})\n\t</script>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "<script>\n\tdocument.addEventListener('alpine:init', () => {\n\tAlpine.data('admin', () => ({\n\t\t// timeUtils object holds all time related utilities\n\t\ttimeUtils: {\n\t\t\tformatTime(isoString) {\n\t\t\t\tif (!isoString) return 'ERR time format'\n\t\t\t\tconst date = new Date(isoString);\n\t\t\t\tconst now = new Date();\n\t\t\t\tconst diffHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);\n\t\t\t\tif (diffHours < 1) return `less than an hour ago`\n\t\t\t\tif (diffHours < 72) return `${Math.round(diffHours)} hours ago`;\n\t\t\t\treturn date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });\n\t\t\t}\n\t\t},\n\n\t}))\n\t})\n\t</script>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

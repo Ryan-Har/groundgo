@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/Ryan-Har/groundgo/pkg/models"
-	"strconv"
 	"time"
 )
 
@@ -13,7 +12,7 @@ templ AdminPage(users []*models.User) {
 	<div class="container is-fluid" x-data="admin">
 		@pageHeader()
 		<div class="container">
-			@pageStatistics(statsFromUsers(users))
+			@pageStatistics(pageStatisticsxData(users))
 			@pageFilters()
 			@UserTable(users)
 		</div>
@@ -50,7 +49,22 @@ templ pageHeader() {
 	</div>
 }
 
-func statsFromUsers(users []*models.User) (total, active, inactive, admin int) {
+templ pageStatistics(xData string) {
+	<div
+		class="columns is-multiline mb-5"
+		x-data={ xData }
+		@update-stats.window="updateStats($event)"
+	>
+		@statisticsTotalCard()
+		@statisticsActiveCard()
+		@statisticsInactiveCard()
+		@statisticsAdminCard()
+	</div>
+}
+
+// pageStatisticsxData formats the x-data for the statistics component
+func pageStatisticsxData(users []*models.User) string {
+	var total, active, inactive, admin int
 	for _, user := range users {
 		total++
 		if user.Claims.HasAtLeast("/", models.RoleAdmin) {
@@ -62,27 +76,47 @@ func statsFromUsers(users []*models.User) (total, active, inactive, admin int) {
 			inactive++
 		}
 	}
-	return
+
+	return fmt.Sprintf(`{
+        stats: {
+            total: %d,
+            active: %d,
+            inactive: %d,
+            admin: %d
+        },
+        flashing: {
+            total: false,
+            active: false,
+            inactive: false,
+            admin: false    
+        },
+        updateStats(event) {
+            const updates = event.detail;
+            for (const key in updates) {
+                if (this.stats.hasOwnProperty(key)) {
+                    this.stats[key] += updates[key];
+                    this.flashStat(key);
+                }
+            }
+        },
+        flashStat(statKey) {
+            this.flashing[statKey] = true;
+            setTimeout(() => {
+                this.flashing[statKey] = false;
+            }, 1000);   
+        }
+    }`, total, active, inactive, admin)
 }
 
-templ pageStatistics(total, active, inactive, admin int) {
-	<div class="columns is-multiline mb-5">
-		@statisticsTotalCard(total)
-		@statisticsActiveCard(active)
-		@statisticsInactiveCard(inactive)
-		@statisticsAdminCard(admin)
-	</div>
-}
-
-templ statisticsTotalCard(number int) {
+templ statisticsTotalCard() {
 	<div class="column is-3">
-		<div class="stats-card">
+		<div class="stats-card" :class="{ flash: flashing.total }">
 			<div class="level">
 				<div class="level-left">
 					<div class="level-item">
 						<div>
 							<p class="heading">Total Users</p>
-							<p class="title is-4">{ strconv.Itoa(number) }</p>
+							<p class="title is-4" x-text="stats.total"></p>
 						</div>
 					</div>
 				</div>
@@ -98,15 +132,15 @@ templ statisticsTotalCard(number int) {
 	</div>
 }
 
-templ statisticsActiveCard(number int) {
+templ statisticsActiveCard() {
 	<div class="column is-3">
-		<div class="stats-card">
+		<div class="stats-card" :class="{ flash: flashing.active }">
 			<div class="level">
 				<div class="level-left">
 					<div class="level-item">
 						<div>
 							<p class="heading">Active Users</p>
-							<p class="title is-4">{ strconv.Itoa(number) }</p>
+							<p class="title is-4" x-text="stats.active"></p>
 						</div>
 					</div>
 				</div>
@@ -122,15 +156,15 @@ templ statisticsActiveCard(number int) {
 	</div>
 }
 
-templ statisticsInactiveCard(number int) {
+templ statisticsInactiveCard() {
 	<div class="column is-3">
-		<div class="stats-card">
+		<div class="stats-card" :class="{ flash: flashing.inactive }">
 			<div class="level">
 				<div class="level-left">
 					<div class="level-item">
 						<div>
 							<p class="heading">Inactive Users</p>
-							<p class="title is-4">{ strconv.Itoa(number) }</p>
+							<p class="title is-4" x-text="stats.inactive"></p>
 						</div>
 					</div>
 				</div>
@@ -146,15 +180,15 @@ templ statisticsInactiveCard(number int) {
 	</div>
 }
 
-templ statisticsAdminCard(number int) {
+templ statisticsAdminCard() {
 	<div class="column is-3">
-		<div class="stats-card">
+		<div class="stats-card" :class="{ flash: flashing.admin }">
 			<div class="level">
 				<div class="level-left">
 					<div class="level-item">
 						<div>
 							<p class="heading">Admin Users</p>
-							<p class="title is-4">{ strconv.Itoa(number) }</p>
+							<p class="title is-4" x-text="stats.admin"></p>
 						</div>
 					</div>
 				</div>
@@ -503,7 +537,6 @@ func UserRowEditPartialxData(u *models.User) string {
 		marshalStringArray(allRoles))
 }
 
-
 templ adminStyle() {
 	<style>
       .claims-list {
@@ -538,6 +571,15 @@ templ adminStyle() {
 
 		.table tr.is-selected {
 		background-color: rgba(0, 209, 178, 0.08);
+		}
+
+		.flash {
+	 	animation: flash-bg 0.5s ease;
+		}
+
+		@keyframes flash-bg {
+		0%   { background-color: #fffa8b; } /* bright yellow */
+		100% { background-color: transparent; }
 		}
 
 		/* Dark mode overrides */
