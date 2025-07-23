@@ -68,7 +68,8 @@ type Store interface {
 	UpdateUserRole(ctx context.Context, id uuid.UUID, role models.Role) error
 
 	// UpdateUserClaims replaces the user’s claims with the provided claims map.
-	// This method must also ensure that the root claim ("/") is updated to match the user's existing role.
+	// This method must also ensure that the root claim ("/") is updated to match the user's existing role if not specified.
+	// It updates the role too if the root claim provided has a different role to what exists currently.
 	UpdateUserClaims(ctx context.Context, id uuid.UUID, claims models.Claims) error
 
 	// UpdateUserPassword hashes and stores the new password for the specified user.

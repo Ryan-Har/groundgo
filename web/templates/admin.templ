@@ -1,8 +1,10 @@
 package templates
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/Ryan-Har/groundgo/pkg/models"
+	"strconv"
 	"time"
 )
 
@@ -11,7 +13,7 @@ templ AdminPage(users []*models.User) {
 	<div class="container is-fluid" x-data="admin">
 		@pageHeader()
 		<div class="container">
-			@pageStatistics()
+			@pageStatistics(statsFromUsers(users))
 			@pageFilters()
 			@UserTable(users)
 		</div>
@@ -48,88 +50,119 @@ templ pageHeader() {
 	</div>
 }
 
-templ pageStatistics() {
+func statsFromUsers(users []*models.User) (total, active, inactive, admin int) {
+	for _, user := range users {
+		total++
+		if user.Claims.HasAtLeast("/", models.RoleAdmin) {
+			admin++
+		}
+		if user.IsActive {
+			active++
+		} else {
+			inactive++
+		}
+	}
+	return
+}
+
+templ pageStatistics(total, active, inactive, admin int) {
 	<div class="columns is-multiline mb-5">
-		<div class="column is-3">
-			<div class="stats-card">
-				<div class="level">
-					<div class="level-left">
-						<div class="level-item">
-							<div>
-								<p class="heading">Total Users</p>
-								<p class="title is-4">1,247</p>
-							</div>
+		@statisticsTotalCard(total)
+		@statisticsActiveCard(active)
+		@statisticsInactiveCard(inactive)
+		@statisticsAdminCard(admin)
+	</div>
+}
+
+templ statisticsTotalCard(number int) {
+	<div class="column is-3">
+		<div class="stats-card">
+			<div class="level">
+				<div class="level-left">
+					<div class="level-item">
+						<div>
+							<p class="heading">Total Users</p>
+							<p class="title is-4">{ strconv.Itoa(number) }</p>
 						</div>
 					</div>
-					<div class="level-right">
-						<div class="level-item">
-							<span class="icon is-large has-text-primary">
-								<i class="fas fa-users fa-2x"></i>
-							</span>
-						</div>
+				</div>
+				<div class="level-right">
+					<div class="level-item">
+						<span class="icon is-large has-text-primary">
+							<i class="fas fa-users fa-2x"></i>
+						</span>
 					</div>
 				</div>
 			</div>
 		</div>
-		<div class="column is-3">
-			<div class="stats-card">
-				<div class="level">
-					<div class="level-left">
-						<div class="level-item">
-							<div>
-								<p class="heading">Active Users</p>
-								<p class="title is-4">1,156</p>
-							</div>
+	</div>
+}
+
+templ statisticsActiveCard(number int) {
+	<div class="column is-3">
+		<div class="stats-card">
+			<div class="level">
+				<div class="level-left">
+					<div class="level-item">
+						<div>
+							<p class="heading">Active Users</p>
+							<p class="title is-4">{ strconv.Itoa(number) }</p>
 						</div>
 					</div>
-					<div class="level-right">
-						<div class="level-item">
-							<span class="icon is-large has-text-success">
-								<i class="fas fa-user-check fa-2x"></i>
-							</span>
-						</div>
+				</div>
+				<div class="level-right">
+					<div class="level-item">
+						<span class="icon is-large has-text-success">
+							<i class="fas fa-user-check fa-2x"></i>
+						</span>
 					</div>
 				</div>
 			</div>
 		</div>
-		<div class="column is-3">
-			<div class="stats-card">
-				<div class="level">
-					<div class="level-left">
-						<div class="level-item">
-							<div>
-								<p class="heading">Inactive Users</p>
-								<p class="title is-4">91</p>
-							</div>
+	</div>
+}
+
+templ statisticsInactiveCard(number int) {
+	<div class="column is-3">
+		<div class="stats-card">
+			<div class="level">
+				<div class="level-left">
+					<div class="level-item">
+						<div>
+							<p class="heading">Inactive Users</p>
+							<p class="title is-4">{ strconv.Itoa(number) }</p>
 						</div>
 					</div>
-					<div class="level-right">
-						<div class="level-item">
-							<span class="icon is-large has-text-warning">
-								<i class="fas fa-user-clock fa-2x"></i>
-							</span>
-						</div>
+				</div>
+				<div class="level-right">
+					<div class="level-item">
+						<span class="icon is-large has-text-warning">
+							<i class="fas fa-user-clock fa-2x"></i>
+						</span>
 					</div>
 				</div>
 			</div>
 		</div>
-		<div class="column is-3">
-			<div class="stats-card">
-				<div class="level">
-					<div class="level-left">
-						<div class="level-item">
-							<div>
-								<p class="heading">Admin Users</p>
-								<p class="title is-4">12</p>
-							</div>
+	</div>
+}
+
+templ statisticsAdminCard(number int) {
+	<div class="column is-3">
+		<div class="stats-card">
+			<div class="level">
+				<div class="level-left">
+					<div class="level-item">
+						<div>
+							<p class="heading">Admin Users</p>
+							<p class="title is-4">{ strconv.Itoa(number) }</p>
 						</div>
 					</div>
-					<div class="level-right">
-						<div class="level-item">
-							<span class="icon is-large has-text-danger">
-								<i class="fas fa-user-shield fa-2x"></i>
-							</span>
-						</div>
+				</div>
+				<div class="level-right">
+					<div class="level-item">
+						<span class="icon is-large has-text-danger">
+							<i class="fas fa-user-shield fa-2x"></i>
+						</span>
 					</div>
 				</div>
 			</div>
@@ -210,54 +243,11 @@ templ UserTable(users []*models.User) {
 			@tableHeader()
 			<tbody>
 				for _, user := range users {
-					@userRow(user)
+					@UserRow(user)
 				}
 			</tbody>
 		</table>
 	</div>
-	//temp
-	<table class="table is-striped is-fullwidth">
-		<thead>
-			<tr>
-				<th>Email</th>
-				<th>Claims</th>
-				<th>Actions</th>
-			</tr>
-		</thead>
-		<tbody>
-			for _, _ = range users {
-				<tr>
-					<td>
-						user email
-					</td>
-					<td>
-						user claims
-					</td>
-					<td>
-						<div class="buttons are-small">
-							<button
-								class="button is-info"
-								hx-post="/reset-password"
-								hx-vals='{"id":"@user.ID"}'
-								hx-swap="none"
-							>
-								Reset Password
-							</button>
-							<button
-								class="button is-danger"
-								hx-post="/delete-user"
-								hx-vals='{"id":"@user.ID"}'
-								hx-target="#user-table"
-								hx-swap="outerHTML"
-							>
-								Delete
-							</button>
-						</div>
-					</td>
-				</tr>
-			}
-		</tbody>
-	</table>
 }
 
 templ tableHeader() {
@@ -277,11 +267,16 @@ templ tableHeader() {
 	</thead>
 }
 
-templ userRow(user *models.User) {
-	<tr>
+templ UserRow(user *models.User) {
+	<tr
+		hx-get={ fmt.Sprintf("/admin/users/%s/edit-row", user.ID.String()) }
+		hx-target="this"
+		hx-swap="outerHTML"
+		class="user-row"
+	>
 		<td>
 			<label class="checkbox">
-				<input type="checkbox"/>
+				<input type="checkbox" @click.stop/>
 			</label>
 		</td>
 		<td>
@@ -293,12 +288,16 @@ templ userRow(user *models.User) {
 			</div>
 		</td>
 		<td>
-			<span class="tag is-success">Active</span>
+			if user.IsActive {
+				<span class="tag is-success">Active</span>
+			} else {
+				<span class="tag is-warning">Inactive</span>
+			}
 		</td>
 		<td>
 			<div class="claims-list">
-				for claim, perm := range user.Claims {
-					<span class="tag claim-tag">{ fmt.Sprintf("%s.%s", claim, perm.String()) }</span>
+				for _, claim := range user.Claims.AsSlice() {
+					<span class="tag claim-tag">{ claim }</span>
 				}
 			</div>
 		</td>
@@ -310,6 +309,200 @@ templ userRow(user *models.User) {
 		</td>
 	</tr>
 }
+
+templ UserRowEditPartial(user *models.User) {
+	<tr
+		class="is-selected"
+		x-data={ UserRowEditPartialxData(user) }
+	>
+		<td colspan="6">
+			<div class="p-4">
+				<div class="field">
+					<label class="label">Email</label>
+					<div class="control">
+						<p class="is-size-6 has-text-grey-light is-italic">{ user.Email }</p>
+					</div>
+				</div>
+				<!-- Warning message -->
+				<div x-show="showWarning" class="notification is-warning is-light" x-transition>
+					<button class="delete" @click="showWarning = false"></button>
+					<p x-text="warningMessage"></p>
+				</div>
+				<div class="field">
+					<label class="label">Current Claims</label>
+					<div class="field is-grouped is-grouped-multiline">
+						<template x-for="(claim, index) in claims" :key="index">
+							<div class="control">
+								<div class="tags has-addons">
+									<span class="tag is-link" x-text="claim"></span>
+									<a class="tag is-delete" @click="removeClaim(index)" title="Remove claim"></a>
+								</div>
+							</div>
+						</template>
+						<p x-show="claims.length === 0" class="has-text-grey-light is-italic">
+							No claims assigned.
+						</p>
+					</div>
+				</div>
+				<div class="field">
+					<label class="label">Add New Claim</label>
+					<div class="field has-addons">
+						<div class="control is-expanded">
+							<input class="input" type="text" placeholder="Resource (e.g., /orders/*)" x-model="newClaimResource" @keydown.enter.prevent="addClaim()"/>
+						</div>
+						<div class="control">
+							<span class="select">
+								<select x-model="newClaimRole">
+									<template x-for="role in availableRoles" :key="role">
+										<option :value="role" x-text="role"></option>
+									</template>
+								</select>
+							</span>
+						</div>
+						<div class="control">
+							<button class="button is-info" @click="addClaim()" :disabled="!newClaimResource.trim()">
+								Add
+							</button>
+						</div>
+					</div>
+				</div>
+				<div class="field is-grouped mt-5">
+					<div class="control">
+						<button
+							class="button is-primary"
+							hx-put={ fmt.Sprintf("/admin/users/%s/claims", user.ID.String()) }
+							hx-target="closest tr"
+							hx-swap="outerHTML"
+							:hx-vals="JSON.stringify({ claims: claims })"
+						>
+							✅ Save
+						</button>
+					</div>
+					<div class="control">
+						<button
+							class="button"
+							hx-get={ fmt.Sprintf("/admin/users/%s", user.ID.String()) }
+							hx-target="closest tr"
+							hx-swap="outerHTML"
+						>
+							❌ Cancel
+						</button>
+					</div>
+					<div class="control is-expanded"></div>
+					<div class="control">
+						<button
+							class="button is-light is-warning"
+							hx-post={ fmt.Sprintf("/admin/users/%s/reset-password", user.ID.String()) }
+							hx-swap="none"
+						>
+							🔑 Reset Password
+						</button>
+					</div>
+					if user.IsActive {
+						<div class="control">
+							<button
+								class="button is-light is-warning"
+								hx-post={ fmt.Sprintf("/admin/users/%s/disable", user.ID.String()) }
+								hx-target="closest tr"
+								hx-swap="outerHTML"
+								hx-confirm="Are you sure you want to disable this user?"
+							>
+								🚫 Disable
+							</button>
+						</div>
+					} else {
+						<div class="control">
+							<button
+								class="button is-light is-warning"
+								hx-post={ fmt.Sprintf("/admin/users/%s/enable", user.ID.String()) }
+								hx-target="closest tr"
+								hx-swap="outerHTML"
+							>
+								🔓 Enable
+							</button>
+						</div>
+					}
+					<div class="control">
+						<button
+							class="button is-danger"
+							hx-delete={ fmt.Sprintf("/admin/users/%s", user.ID.String()) }
+							hx-target="closest tr"
+							hx-swap="outerHTML"
+							hx-confirm="Are you sure you want to permanently delete this user? This action cannot be undone."
+						>
+							🗑️ Delete
+						</button>
+					</div>
+				</div>
+			</div>
+		</td>
+	</tr>
+}
+
+// UserRowEditPartialxData formats the x-data for the UserRowEditPartial component
+func UserRowEditPartialxData(u *models.User) string {
+
+	claimsSlice := u.Claims.AsSlice()
+	allRoles := models.ListRoles()
+
+	// Ensure we have a default role
+	defaultRole := "guest"
+	if len(allRoles) > 0 {
+		defaultRole = allRoles[0]
+	}
+
+	// Helper function to marshal JSON arrays
+	marshalStringArray := func(arr []string) string {
+		bytes, _ := json.Marshal(arr)
+		return string(bytes)
+	}
+
+	// Build the x-data object manually to avoid HTML escaping issues
+	return fmt.Sprintf(`{
+        claims: %s,
+        newClaimResource: '',
+        newClaimRole: '%s',
+        availableRoles: %s,
+        warningMessage: '',
+        showWarning: false,
+        addClaim() {
+			const resource = this.newClaimResource.trim();
+			if (!resource) return;
+			
+			const fullClaim = `+"`${resource}:${this.newClaimRole}`"+`;
+			
+			// Check if resource already exists
+			const existingIndex = this.claims.findIndex(claim => 
+				claim.split(':')[0] === resource
+			);
+			
+			if (existingIndex !== -1) {
+				const existingClaim = this.claims[existingIndex];
+				const existingRole = existingClaim.split(':')[1];
+				
+				// Show warning and replace
+				this.warningMessage = `+"`Resource '${resource}' already exists with role '${existingRole}'. It will be replaced with '${this.newClaimRole}'.`"+`;
+				this.showWarning = true;
+				
+				this.claims.splice(existingIndex, 1);
+				this.claims.push(fullClaim);
+				
+				setTimeout(() => { this.showWarning = false; }, 3000);
+			} else {
+				this.claims.push(fullClaim);
+			}
+			
+			this.newClaimResource = '';
+        },
+        removeClaim(index) {
+            this.claims.splice(index, 1);
+        }
+    }`,
+		marshalStringArray(claimsSlice),
+		defaultRole,
+		marshalStringArray(allRoles))
+}
+
 
 templ adminStyle() {
 	<style>
@@ -343,6 +536,10 @@ templ adminStyle() {
 		background-color: #ffffff; /* default light */
 		}
 
+		.table tr.is-selected {
+		background-color: rgba(0, 209, 178, 0.08);
+		}
+
 		/* Dark mode overrides */
 		@media (prefers-color-scheme: dark) {
 		.stats-card {
@@ -361,6 +558,9 @@ templ adminStyle() {
 			border: 1px solid rgba(255, 255, 255, 0.05);
 			box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6),
 						0 0 0 1px rgba(255, 255, 255, 0.04);
+		}
+		.table tr.is-selected {
+			background-color: rgba(0, 209, 178, 0.2);
 		}
 	}
 

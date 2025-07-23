@@ -2,10 +2,12 @@ package access
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/Ryan-Har/groundgo/pkg/models"
 	"github.com/Ryan-Har/groundgo/pkg/models/passwd"
 	"github.com/Ryan-Har/groundgo/web/templates"
+	"github.com/google/uuid"
 )
 
 // LoadDefaultPolicies sets a baseline set of access control rules for common
@@ -62,7 +64,7 @@ func (e *Enforcer) SetDefaultLoginRoute() {
 
 		e.logger.V(4).Info("form parsed", "method", r.Method, "path", r.URL.Path)
 		user, err := e.auth.GetUserByEmail(r.Context(), email)
-		if err != nil || user.PasswordHash == nil {
+		if err != nil || user.PasswordHash == nil || !user.IsActive {
 			if rendErr := templates.LoginError().Render(r.Context(), w); rendErr != nil {
 				e.logger.Error(err, "returning login error from POST /login")
 			}
@@ -170,6 +172,7 @@ func (e *Enforcer) SetDefaultSignupRoute() {
 
 // SetDefaultAdminRoute configures the HTTP handler for the admin dashboard.
 func (e *Enforcer) SetDefaultAdminRoute() {
+	// full admin page
 	e.HandleFunc("GET /admin", func(w http.ResponseWriter, r *http.Request) {
 		users, err := e.auth.ListAllUsers(r.Context())
 		if err != nil {
@@ -180,6 +183,172 @@ func (e *Enforcer) SetDefaultAdminRoute() {
 		if err := templates.Layout("Admin", content).Render(r.Context(), w); err != nil {
 			e.logger.Error(err, "unable to GET /admin")
 			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	})
+
+	// partial for getting a single user by ID. Populates a single row in the table
+	e.HandleFunc("GET /admin/users/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		usrID, err := uuid.Parse(id)
+		if err != nil {
+			e.logger.Error(err, "unable to parse provided id into uuid", "id", id)
+			http.Error(w, "unable to parse provided id into uuid", http.StatusBadRequest)
+		}
+
+		user, err := e.auth.GetUserByID(r.Context(), usrID)
+		if err != nil {
+			e.logger.Error(err, "unable to list user with uuid", "uuid", usrID.String())
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+
+		if err := templates.UserRow(user).Render(r.Context(), w); err != nil {
+			e.logger.Error(err, "unable to render UserRowPartial")
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	})
+
+	// partial for edit-row, allowing the modification of a single user within the admin page
+	e.HandleFunc("GET /admin/users/{id}/edit-row", func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		usrID, err := uuid.Parse(id)
+		if err != nil {
+			e.logger.Error(err, "unable to parse provided id into uuid", "id", id)
+			http.Error(w, "unable to parse provided id into uuid", http.StatusBadRequest)
+			return
+		}
+
+		user, err := e.auth.GetUserByID(r.Context(), usrID)
+		if err != nil {
+			e.logger.Error(err, "unable to list user with uuid", "uuid", usrID.String())
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		err = templates.UserRowEditPartial(user).Render(r.Context(), w)
+		if err != nil {
+			e.logger.Error(err, "unable to render UserRowEditPartial")
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	})
+
+	// partial for getting a single user by ID. Populates a single row in the table
+	e.HandleFunc("PUT /admin/users/{id}/claims", func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		usrID, err := uuid.Parse(id)
+		if err != nil {
+			e.logger.Error(err, "unable to parse provided id into uuid", "id", id)
+			http.Error(w, "unable to parse provided id into uuid", http.StatusBadRequest)
+			return
+		}
+
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Failed to parse form", http.StatusBadRequest)
+			return
+		}
+		claimSlice := r.Form["claims"]
+
+		claims := make(models.Claims)
+
+		for _, claimStr := range claimSlice {
+			parts := strings.SplitN(claimStr, ":", 2)
+			resource := parts[0]
+			role := models.Role("")
+			if len(parts) > 1 {
+				role = models.Role(parts[1])
+			}
+			claims[resource] = role
+		}
+
+		if err := e.auth.UpdateUserClaims(r.Context(), usrID, claims); err != nil {
+			e.logger.Error(err, "unable to update user claim")
+		}
+
+		user, err := e.auth.GetUserByID(r.Context(), usrID)
+		if err != nil {
+			e.logger.Error(err, "unable to list user with uuid", "uuid", usrID.String())
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		if err := templates.UserRow(user).Render(r.Context(), w); err != nil {
+			e.logger.Error(err, "unable to render UserRowPartial")
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	})
+
+	// partial for hard deleting a user
+	e.HandleFunc("DELETE /admin/users/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		usrID, err := uuid.Parse(id)
+		if err != nil {
+			e.logger.Error(err, "unable to parse provided id into uuid", "id", id)
+			http.Error(w, "unable to parse provided id into uuid", http.StatusBadRequest)
+		}
+
+		// TODO: add persistent logging for This kind of thing
+		if err := e.auth.HardDeleteUser(r.Context(), usrID); err != nil {
+			e.logger.Error(err, "unable to delete user", "id", id)
+			http.Error(w, "unable to delete user", http.StatusInternalServerError)
+		}
+	})
+
+	// partial for disabling a single user by ID. Populates a single row in the table
+	e.HandleFunc("POST /admin/users/{id}/disable", func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		usrID, err := uuid.Parse(id)
+		if err != nil {
+			e.logger.Error(err, "unable to parse provided id into uuid", "id", id)
+			http.Error(w, "unable to parse provided id into uuid", http.StatusBadRequest)
+			return
+		}
+
+		if err := e.auth.SoftDeleteUser(r.Context(), usrID); err != nil {
+			e.logger.Error(err, "unable to disable user", "id", id)
+			http.Error(w, "unable to disable user", http.StatusInternalServerError)
+		}
+
+		user, err := e.auth.GetUserByID(r.Context(), usrID)
+		if err != nil {
+			e.logger.Error(err, "unable to list user with uuid", "uuid", usrID.String())
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		if err := templates.UserRow(user).Render(r.Context(), w); err != nil {
+			e.logger.Error(err, "unable to render UserRowPartial")
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	})
+
+	// partial for enabling a single user by ID. Populates a single row in the table
+	e.HandleFunc("POST /admin/users/{id}/enable", func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		usrID, err := uuid.Parse(id)
+		if err != nil {
+			e.logger.Error(err, "unable to parse provided id into uuid", "id", id)
+			http.Error(w, "unable to parse provided id into uuid", http.StatusBadRequest)
+			return
+		}
+
+		if err := e.auth.RestoreUser(r.Context(), usrID); err != nil {
+			e.logger.Error(err, "unable to enable user", "id", id)
+			http.Error(w, "unable to enable user", http.StatusInternalServerError)
+		}
+
+		user, err := e.auth.GetUserByID(r.Context(), usrID)
+		if err != nil {
+			e.logger.Error(err, "unable to list user with uuid", "uuid", usrID.String())
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		if err := templates.UserRow(user).Render(r.Context(), w); err != nil {
+			e.logger.Error(err, "unable to render UserRowPartial")
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 	})
 }

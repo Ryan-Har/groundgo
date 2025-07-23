@@ -1,6 +1,9 @@
 package models
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // Claims maps resource paths to roles, representing access permissions.
 type Claims map[string]Role
@@ -48,4 +51,15 @@ func (c Claims) HasAtLeast(resource string, required Role) bool {
 // AddRole assigns a Role to the specified resource path in the Claims map.
 func (c Claims) AddRole(resource string, role Role) {
 	c[resource] = role
+}
+
+// AsSlice returns the claims as a colon delimited slice of roles
+// eg. "/": "admin", "/admin": "user" -> ["/:admin", "/admin:user"]
+func (c Claims) AsSlice() []string {
+	claimsSlice := make([]string, 0, len(c))
+
+	for resource, role := range c {
+		claimsSlice = append(claimsSlice, fmt.Sprintf("%s:%s", resource, role.String()))
+	}
+	return claimsSlice
 }

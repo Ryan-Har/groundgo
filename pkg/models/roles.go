@@ -1,6 +1,9 @@
 package models
 
-import "fmt"
+import (
+	"fmt"
+	"slices"
+)
 
 // Role represents a user role in the system
 type Role string
@@ -33,6 +36,30 @@ var RoleHierarchy = map[Role]int{
 	RoleAdmin:       70,
 	RoleOwner:       80,
 	RoleSystemAdmin: 90,
+}
+
+// ListRoles returns a slice of all existing roles from the RoleHierarchy with the lowest permission role first and the highest last.
+func ListRoles() []string {
+	type pair struct {
+		role Role
+		val  int
+	}
+	pairs := make([]pair, 0, len(RoleHierarchy))
+	for r, v := range RoleHierarchy {
+		pairs = append(pairs, pair{role: r, val: v})
+	}
+
+	slices.SortFunc(pairs, func(a, b pair) int {
+		// return negative if a < b, 0 if equal, positive if a > b
+		return a.val - b.val
+	})
+
+	result := make([]string, 0, len(pairs))
+	for _, p := range pairs {
+		result = append(result, p.role.String())
+	}
+
+	return result
 }
 
 // IsValid checks if the Role is one of the predefined valid roles.

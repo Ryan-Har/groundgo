@@ -140,7 +140,7 @@ func (s *sqliteAuthStore) GetUserByOAuth(ctx context.Context, args models.UserOA
 }
 
 func (s *sqliteAuthStore) ListAllUsers(ctx context.Context) ([]*models.User, error) {
-	defer s.newTimingLogger(time.Now(), "executed sql query", "method", "GetUserByOAuth")()
+	defer s.newTimingLogger(time.Now(), "executed sql query", "method", "ListAllUsers")()
 
 	var users []*models.User
 
@@ -271,17 +271,24 @@ func (s *sqliteAuthStore) UpdateUserClaims(ctx context.Context, id uuid.UUID, cl
 		return models.NewDatabaseError("failed to fetch user for claim update", err)
 	}
 
-	claims["/"] = models.Role(user.Role)
+	// role must be updated if the root claim is. If now, the root claim should be added.
+	_, exists := claims["/"]
+	if !exists {
+		claims["/"] = models.Role(user.Role)
+	}
 
 	claimsStr, err := transform.SerializeClaims(claims)
 	if err != nil {
 		return models.NewTransformationError(err.Error())
 	}
 
-	err = s.queries.UpdateUserClaims(ctx, sqliteDB.UpdateUserClaimsParams{
+	// Update the user's role and claims
+	err = s.queries.UpdateUserRoleAndClaims(ctx, sqliteDB.UpdateUserRoleAndClaimsParams{
 		ID:     id.String(),
+		Role:   claims["/"].String(),
 		Claims: claimsStr,
 	})
+
 	if err != nil {
 		return models.NewDatabaseError("failed to update user claims", err)
 	}
