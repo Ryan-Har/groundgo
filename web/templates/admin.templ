@@ -336,7 +336,7 @@ templ UserRow(user *models.User) {
 			</div>
 		</td>
 		<td>
-			<span class="has-text-grey-dark" x-text={ fmt.Sprintf("timeUtils.formatTime('%s')", user.CreatedAt.Format(time.RFC3339)) }>Loading...</span>
+			<span class="has-text-grey-dark" x-text={ fmt.Sprintf("timeUtils.formatTime('%s')", user.UpdatedAt.Format(time.RFC3339)) }>Loading...</span>
 		</td>
 		<td>
 			<span class="has-text-grey-dark" x-text={ fmt.Sprintf("timeUtils.formatTime('%s')", user.CreatedAt.Format(time.RFC3339)) }>Loading...</span>
