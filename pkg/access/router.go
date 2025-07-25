@@ -41,13 +41,15 @@ func (e *Enforcer) Handle(route string, handler http.Handler) {
 
 			// Try exact method match first
 			if h, ok := methodHandlers[r.Method]; ok {
-				h.ServeHTTP(w, r)
+				wrapped := e.WrapHandler(path, r.Method, h)
+				wrapped.ServeHTTP(w, r)
 				return
 			}
 
 			// Try wildcard (no method specified during registration)
 			if h, ok := methodHandlers[""]; ok {
-				h.ServeHTTP(w, r)
+				wrapped := e.WrapHandler(path, r.Method, h)
+				wrapped.ServeHTTP(w, r)
 				return
 			}
 
@@ -62,11 +64,8 @@ func (e *Enforcer) Handle(route string, handler http.Handler) {
 		e.logger.Error(err, "ERROR", "path", path, "method", method)
 	}
 
-	// Apply auth/authz middleware
-	wrapped := e.WrapHandler(path, method, handler)
-
 	// Store handler
-	e.handlers[path][method] = wrapped
+	e.handlers[path][method] = handler
 }
 
 // HandleFunc is a convenience wrapper around Handle that accepts
