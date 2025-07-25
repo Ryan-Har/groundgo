@@ -12,11 +12,29 @@ type Querier interface {
 	// Checks if an email address already exists in the database.
 	// Returns a count (0 or 1).
 	CheckEmailExists(ctx context.Context, email string) (int64, error)
+	// CreateAuditLog inserts a new security event into the audit trail.
+	CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) (AuthAuditLog, error)
+	// CreateSession creates a new session record for a user.
+	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
 	// Inserts a new user into the database.
 	// Returns the newly created user's ID.
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	// DeleteExpiredRevokedTokens purges tokens from the revocation list
+	// after they would have naturally expired. This keeps the table clean.
+	DeleteExpiredRevokedTokens(ctx context.Context) error
+	// DeleteExpiredSessions purges all session records that have passed their expiration time.
+	// This should be run periodically by a background job.
+	DeleteExpiredSessions(ctx context.Context) error
+	// DeleteSession removes a specific session, effectively logging the user out.
+	DeleteSession(ctx context.Context, id string) error
+	// DeleteSessionsByUserID removes all active sessions for a given user.
+	// This is useful for "log out from all other devices" functionality.
+	DeleteSessionsByUserID(ctx context.Context, userID int64) error
 	// Deletes a user from the database by their ID.
 	DeleteUser(ctx context.Context, id string) error
+	// GetSession retrieves a single, active session by its ID.
+	// It will not return a session if it has expired.
+	GetSession(ctx context.Context, id string) (Session, error)
 	// Retrieves a user by their email address.
 	// Used for login and checking existing registrations.
 	GetUserByEmail(ctx context.Context, email string) (User, error)
@@ -26,9 +44,20 @@ type Querier interface {
 	// Retrieves a user by their OAuth provider and OAuth ID.
 	// Used for logging in users who registered via an OAuth provider.
 	GetUserByOAuth(ctx context.Context, arg GetUserByOAuthParams) (User, error)
+	// IsTokenRevoked checks if a token's JTI exists in the revocation list.
+	// sqlc will generate a method that returns a boolean.
+	IsTokenRevoked(ctx context.Context, id string) (int64, error)
 	// Retrieves all users from the database.
 	// Useful for administrative purposes (e.g., user management panel).
 	ListAllUsers(ctx context.Context) ([]User, error)
+	// ListAuditLogsByEventType retrieves a paginated list of audit events of a specific type,
+	// ordered from newest to oldest.
+	ListAuditLogsByEventType(ctx context.Context, arg ListAuditLogsByEventTypeParams) ([]AuthAuditLog, error)
+	// ListAuditLogsForUser retrieves a paginated list of audit events for a specific user,
+	// ordered from newest to oldest.
+	ListAuditLogsForUser(ctx context.Context, arg ListAuditLogsForUserParams) ([]AuthAuditLog, error)
+	// RevokeToken adds a token's JTI (JWT ID) to the revocation list.
+	RevokeToken(ctx context.Context, arg RevokeTokenParams) (RevokedToken, error)
 	// Updates a user's JSON claims data and updates the 'updated_at' timestamp.
 	UpdateUserClaims(ctx context.Context, arg UpdateUserClaimsParams) error
 	// Updates a user's active status (e.g., for deactivation) and updates the 'updated_at' timestamp.

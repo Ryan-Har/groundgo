@@ -4,6 +4,32 @@
 
 package sqliteDB
 
+type AuthAuditLog struct {
+	ID        int64   `json:"id"`
+	UserID    *string `json:"userId"`
+	EventType string  `json:"eventType"`
+	IpAddress *string `json:"ipAddress"`
+	UserAgent *string `json:"userAgent"`
+	Details   *string `json:"details"`
+	CreatedAt int64   `json:"createdAt"`
+}
+
+type RevokedToken struct {
+	ID                string `json:"id"`
+	UserID            string `json:"userId"`
+	RevokedAt         int64  `json:"revokedAt"`
+	OriginalExpiresAt int64  `json:"originalExpiresAt"`
+}
+
+type Session struct {
+	ID        string  `json:"id"`
+	UserID    int64   `json:"userId"`
+	ExpiresAt int64   `json:"expiresAt"`
+	IpAddress *string `json:"ipAddress"`
+	UserAgent *string `json:"userAgent"`
+	CreatedAt int64   `json:"createdAt"`
+}
+
 type User struct {
 	ID            string  `json:"id"`
 	Email         string  `json:"email"`
