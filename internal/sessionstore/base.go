@@ -1,18 +1,18 @@
 package sessionstore
 
 import (
+	"log/slog"
 	"net/http"
 	"time"
 
-	"github.com/go-logr/logr"
 	"github.com/google/uuid"
 )
 
 type baseSessionStore struct {
-	log logr.Logger
+	log *slog.Logger
 }
 
-func NewBase(logger logr.Logger) *baseSessionStore {
+func NewBase(logger *slog.Logger) *baseSessionStore {
 	s := &baseSessionStore{
 		log: logger,
 	}

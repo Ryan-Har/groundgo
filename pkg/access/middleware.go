@@ -47,11 +47,11 @@ func (e *Enforcer) AuthenticationMiddleware(next http.Handler) http.Handler {
 		// cookie and error means no session
 		if cookie != nil && err != nil {
 			if errors.Is(err, sessionstore.ErrSessionExpired) {
-				e.logger.V(1).Info("expired session found", "session_id", cookie.Value, "url", r.URL.Path)
+				e.log.Debug("expired session found", "session_id", cookie.Value, "url", r.URL.Path)
 				e.session.ExpireCookie(cookie, w)
 				http.Redirect(w, r, "/login", http.StatusSeeOther)
 			} else {
-				e.logger.Error(err, "unknown error getting session cookie")
+				e.log.Error("unknown error getting session cookie")
 				http.Redirect(w, r, "/login", http.StatusInternalServerError)
 			}
 			return
@@ -61,7 +61,7 @@ func (e *Enforcer) AuthenticationMiddleware(next http.Handler) http.Handler {
 		if session != nil {
 			user, err := e.auth.GetUserByID(r.Context(), *session.UserID)
 			if err != nil || user == nil || !user.IsActive { //session exists for a disabled or deleted user
-				e.logger.Info("session request from expired unknown id", "id", session.UserID)
+				e.log.Info("session request from expired unknown id", "id", session.UserID)
 				e.session.ExpireCookie(cookie, w)
 				http.Redirect(w, r, "/login", http.StatusSeeOther)
 				return
@@ -72,7 +72,7 @@ func (e *Enforcer) AuthenticationMiddleware(next http.Handler) http.Handler {
 
 		// final check to see if the user is authenticated
 		if !isAuthenticated {
-			e.logger.V(4).Info("unable to authenticate user, assigning as guest", "remote_address", r.RemoteAddr, "url", r.URL.Path, "user_agent", r.UserAgent())
+			e.log.Debug("unable to authenticate user, assigning as guest", "remote_address", r.RemoteAddr, "url", r.URL.Path, "user_agent", r.UserAgent())
 			authUser.Claims = map[string]models.Role{
 				"/": models.RoleGuest,
 			}
@@ -111,7 +111,7 @@ func (e *Enforcer) AuthorizationMiddleware(path string, required models.Role) fu
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			user, ok := r.Context().Value(userContextKey).(*models.User)
 			if !ok {
-				e.logger.V(0).Info("AuthorizationMiddleware expected User in http context and did not receive")
+				e.log.Error("AuthorizationMiddleware expected User in http context and did not receive", "path", path)
 				http.Error(w, "Forbidden", http.StatusInternalServerError)
 				return
 			}

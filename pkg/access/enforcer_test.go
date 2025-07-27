@@ -1,24 +1,19 @@
 package access
 
 import (
+	"io"
+	"log/slog"
 	"strings"
 	"testing"
 
 	"github.com/Ryan-Har/groundgo/pkg/models"
-	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/require"
 )
 
 // --- Helper: a no-op logger for tests ---
-type noopLogger struct{}
-
-func (noopLogger) Enabled() bool                             { return false }
-func (noopLogger) Info(_ string, _ ...interface{})           {}
-func (noopLogger) Error(_ error, _ string, _ ...interface{}) {}
-func (noopLogger) WithValues(_ ...interface{}) logr.Logger {
-	return logr.Discard()
+func NoopLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
-func (noopLogger) WithName(_ string) logr.Logger { return logr.Discard() }
 
 // --- buildPrefixes tests ---
 func TestBuildPrefixes(t *testing.T) {
@@ -94,7 +89,7 @@ func TestBuildPrefixes(t *testing.T) {
 
 // Additional FindMatchingPolicy tests for HTTP-specific scenarios
 func TestFindMatchingPolicyHTTPScenarios(t *testing.T) {
-	e := NewEnforcer(logr.Discard(), nil, nil, nil)
+	e := NewEnforcer(NoopLogger(), nil, nil, nil)
 
 	// Setup realistic HTTP route policies
 	e.SetPolicy("/api/v1/users", "GET", models.RoleUser)
@@ -188,7 +183,7 @@ func TestFindMatchingPolicyHTTPScenarios(t *testing.T) {
 
 // Test policy precedence - exact method wins over wildcard on same path
 func TestPolicyPrecedence(t *testing.T) {
-	e := NewEnforcer(logr.Discard(), nil, nil, nil)
+	e := NewEnforcer(NoopLogger(), nil, nil, nil)
 
 	// Set up conflicting policies to test precedence
 	e.SetPolicy("/api/users", "*", models.RoleUser)       // wildcard first
@@ -205,7 +200,7 @@ func TestPolicyPrecedence(t *testing.T) {
 
 // Test that policies don't interfere with each other
 func TestPolicyIsolation(t *testing.T) {
-	e := NewEnforcer(logr.Discard(), nil, nil, nil)
+	e := NewEnforcer(NoopLogger(), nil, nil, nil)
 
 	e.SetPolicy("/admin", "*", models.RoleAdmin)
 	e.SetPolicy("/admin/users", "GET", models.RoleUser) // less restrictive child
@@ -223,7 +218,7 @@ func TestPolicyIsolation(t *testing.T) {
 
 // Test empty method string (edge case)
 func TestEmptyMethod(t *testing.T) {
-	e := NewEnforcer(logr.Discard(), nil, nil, nil)
+	e := NewEnforcer(NoopLogger(), nil, nil, nil)
 	e.SetPolicy("/api", "*", models.RoleUser)
 
 	// Empty method should be converted to uppercase and not match wildcard
@@ -234,7 +229,7 @@ func TestEmptyMethod(t *testing.T) {
 
 // --- SetPolicy test (sanity check) ---
 func TestSetPolicyStoresUppercaseMethods(t *testing.T) {
-	e := NewEnforcer(logr.Discard(), nil, nil, nil)
+	e := NewEnforcer(NoopLogger(), nil, nil, nil)
 	e.SetPolicy("/some/path", "get", models.RoleAdmin)
 	require.Equal(t, models.RoleAdmin, e.Policies["/some/path"]["GET"])
 }

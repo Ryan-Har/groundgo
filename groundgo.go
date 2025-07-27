@@ -3,14 +3,14 @@ package groundgo
 import (
 	"database/sql"
 	"fmt"
+	"log/slog"
 
 	"github.com/Ryan-Har/groundgo/pkg/access"
 	"github.com/Ryan-Har/groundgo/pkg/services"
-	"github.com/go-logr/logr"
 )
 
 type GroundGo struct {
-	logger   logr.Logger
+	logger   *slog.Logger
 	config   *Config
 	Services *services.Services
 	Enforcer *access.Enforcer
@@ -24,11 +24,9 @@ type GroundGo struct {
 
 type Option func(*GroundGo)
 
-func WithLogger(l logr.Logger) Option {
+func WithLogger(l *slog.Logger) Option {
 	return func(g *GroundGo) {
-		// Only set the logger if it's not a no-op logger, allowing for explicit Discard()
-		// or if the current logger is Discard() (the default)
-		if l.GetSink() != nil || g.logger.GetSink() == nil {
+		if l != nil {
 			g.logger = l
 		}
 	}
@@ -54,33 +52,32 @@ func WithInMemorySessionStore() Option {
 }
 
 func New(opts ...Option) (*GroundGo, error) {
-	gg := &GroundGo{
-		logger: logr.Discard(), // default to no-op logger
-	}
+	gg := &GroundGo{}
 
 	for _, opt := range opts {
 		opt(gg)
 	}
 
-	gg.logger.V(0).Info("starting groundgo")
+	gg.logger.Info("starting groundgo")
 
 	// load services now that logging is set
-	gg.logger.V(0).Info("attempting to load services")
 	gg.Services = services.New(gg.db, gg.dbType, gg.logger, gg.sessionsInMemory)
+	gg.logger.Debug("groundgo services loaded")
 
 	// load enforcer
-	gg.logger.V(0).Info("attempting to load enforcer")
 	gg.Enforcer = access.NewEnforcer(gg.logger, gg.router, gg.Services.Auth, gg.Services.Session)
+	gg.logger.Info("groundgo enforcer loaded")
 
 	// check if database is pingable
-	gg.logger.V(0).Info("attempting ping of database")
 	if err := gg.db.Ping(); err != nil {
 		return nil, fmt.Errorf("unable to ping database: %w", err)
 	}
+	gg.logger.Debug("successfully connected to database")
 
-	if err := gg.Services.Auth.RunMigrations(); err != nil {
+	if err := gg.Services.RunMigrations(); err != nil {
 		return nil, fmt.Errorf("unable to run migrations: %w", err)
 	}
+	gg.logger.Debug("successfully run migrations")
 
 	return gg, nil
 }

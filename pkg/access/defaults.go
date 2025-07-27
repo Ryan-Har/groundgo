@@ -46,16 +46,16 @@ func (e *Enforcer) SetDefaultLoginRoute() {
 	e.HandleFunc("GET /login", func(w http.ResponseWriter, r *http.Request) {
 		content := templates.LoginPage()
 		if err := templates.Layout("Login", content).Render(r.Context(), w); err != nil {
-			e.logger.Error(err, "unable to GET /login")
+			e.log.Error("unable to GET /login", "err", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	})
 
 	e.HandleFunc("POST /login", func(w http.ResponseWriter, r *http.Request) {
-		defer e.logger.V(4).Info("Processed", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
+		defer e.log.Debug("Processed", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 
 		if err := r.ParseForm(); err != nil {
-			e.logger.Error(err, "parsing form from POST /login")
+			e.log.Error("parsing form from POST /login", "err", err)
 			http.Error(w, "Invalid form", http.StatusBadRequest)
 			return
 		}
@@ -63,24 +63,24 @@ func (e *Enforcer) SetDefaultLoginRoute() {
 		email := r.FormValue("email")
 		password := r.FormValue("password")
 
-		e.logger.V(4).Info("form parsed", "method", r.Method, "path", r.URL.Path)
+		e.log.Debug("form parsed", "method", r.Method, "path", r.URL.Path)
 		user, err := e.auth.GetUserByEmail(r.Context(), email)
 		if err != nil || user.PasswordHash == nil || !user.IsActive {
 			if rendErr := templates.LoginError().Render(r.Context(), w); rendErr != nil {
-				e.logger.Error(err, "returning login error from POST /login")
+				e.log.Error("returning login error from POST /login", "err", err)
 			}
 			return
 		}
 		if !passwd.Authenticate(password, *user.PasswordHash) {
 			if rendErr := templates.LoginError().Render(r.Context(), w); rendErr != nil {
-				e.logger.Error(err, "returning login error from POST /login")
+				e.log.Error("returning login error from POST /login", "err", err)
 			}
 			return
 		}
 
 		session, err := e.session.Create(r.Context(), &user.ID)
 		if err != nil {
-			e.logger.Error(err, "creating session")
+			e.log.Error("creating session", "err", err)
 		}
 
 		http.SetCookie(w, &http.Cookie{
@@ -107,16 +107,16 @@ func (e *Enforcer) SetDefaultSignupRoute() {
 	e.HandleFunc("GET /signup", func(w http.ResponseWriter, r *http.Request) {
 		content := templates.SignupPage()
 		if err := templates.Layout("Signup", content).Render(r.Context(), w); err != nil {
-			e.logger.Error(err, "unable to GET /signup")
+			e.log.Error("unable to GET /signup", "err", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	})
 
 	e.HandleFunc("POST /signup", func(w http.ResponseWriter, r *http.Request) {
-		defer e.logger.V(4).Info("Processed", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
+		defer e.log.Debug("Processed", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 
 		if err := r.ParseForm(); err != nil {
-			e.logger.Error(err, "parsing form from POST /signup")
+			e.log.Error("parsing form from POST /signup", "err", err)
 			http.Error(w, "Invalid form", http.StatusBadRequest)
 			return
 		}
@@ -125,17 +125,17 @@ func (e *Enforcer) SetDefaultSignupRoute() {
 		password := r.FormValue("password")
 		confirm := r.FormValue("confirm")
 
-		e.logger.V(4).Info("form parsed", "method", r.Method, "path", r.URL.Path)
+		e.log.Debug("form parsed", "method", r.Method, "path", r.URL.Path)
 		if password != confirm {
 			if err := templates.SignupError("Passwords do not match").Render(r.Context(), w); err != nil {
-				e.logger.Error(err, "returning signup error from POST /signup")
+				e.log.Error("returning signup error from POST /signup", "err", err)
 			}
 			return
 		}
 
 		if exists, _ := e.auth.CheckEmailExists(r.Context(), email); exists {
 			if err := templates.SignupError("Account already exists").Render(r.Context(), w); err != nil {
-				e.logger.Error(err, "returning signup error from POST /signup")
+				e.log.Error("returning signup error from POST /signup", "err", err)
 			}
 			return
 		}
@@ -148,14 +148,14 @@ func (e *Enforcer) SetDefaultSignupRoute() {
 		})
 		if err != nil {
 			if err := templates.SignupError("Unable to create user, please try again later.").Render(r.Context(), w); err != nil {
-				e.logger.Error(err, "returning signup error from POST /signup")
+				e.log.Error("returning signup error from POST /signup", "err", err)
 			}
 			return
 		}
 
 		session, err := e.session.Create(r.Context(), &user.ID)
 		if err != nil {
-			e.logger.Error(err, "creating session")
+			e.log.Error("creating session", "err", err)
 		}
 
 		http.SetCookie(w, &http.Cookie{
@@ -177,12 +177,12 @@ func (e *Enforcer) SetDefaultAdminRoute() {
 	e.HandleFunc("GET /admin", func(w http.ResponseWriter, r *http.Request) {
 		users, err := e.auth.ListAllUsers(r.Context())
 		if err != nil {
-			e.logger.Error(err, "unable to list users")
+			e.log.Error("unable to list users", "err", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 		content := templates.AdminPage(users)
 		if err := templates.Layout("Admin", content).Render(r.Context(), w); err != nil {
-			e.logger.Error(err, "unable to GET /admin")
+			e.log.Error("unable to GET /admin", "err", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	})
@@ -192,18 +192,18 @@ func (e *Enforcer) SetDefaultAdminRoute() {
 		id := r.PathValue("id")
 		usrID, err := uuid.Parse(id)
 		if err != nil {
-			e.logger.Error(err, "unable to parse provided id into uuid", "id", id)
+			e.log.Error("unable to parse provided id into uuid", "id", id, "err", err)
 			http.Error(w, "unable to parse provided id into uuid", http.StatusBadRequest)
 		}
 
 		user, err := e.auth.GetUserByID(r.Context(), usrID)
 		if err != nil {
-			e.logger.Error(err, "unable to list user with uuid", "uuid", usrID.String())
+			e.log.Error("unable to list user with uuid", "uuid", usrID.String(), "err", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 
 		if err := templates.UserRow(user).Render(r.Context(), w); err != nil {
-			e.logger.Error(err, "unable to render UserRowPartial")
+			e.log.Error("unable to render UserRowPartial", "err", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	})
@@ -213,21 +213,21 @@ func (e *Enforcer) SetDefaultAdminRoute() {
 		id := r.PathValue("id")
 		usrID, err := uuid.Parse(id)
 		if err != nil {
-			e.logger.Error(err, "unable to parse provided id into uuid", "id", id)
+			e.log.Error("unable to parse provided id into uuid", "id", id, "err", err)
 			http.Error(w, "unable to parse provided id into uuid", http.StatusBadRequest)
 			return
 		}
 
 		user, err := e.auth.GetUserByID(r.Context(), usrID)
 		if err != nil {
-			e.logger.Error(err, "unable to list user with uuid", "uuid", usrID.String())
+			e.log.Error("unable to list user with uuid", "uuid", usrID.String(), "err", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
 		err = templates.UserRowEditPartial(user).Render(r.Context(), w)
 		if err != nil {
-			e.logger.Error(err, "unable to render UserRowEditPartial")
+			e.log.Error("unable to render UserRowEditPartial", "err", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -238,7 +238,7 @@ func (e *Enforcer) SetDefaultAdminRoute() {
 		id := r.PathValue("id")
 		usrID, err := uuid.Parse(id)
 		if err != nil {
-			e.logger.Error(err, "unable to parse provided id into uuid", "id", id)
+			e.log.Error("unable to parse provided id into uuid", "id", id, "err", err)
 			http.Error(w, "unable to parse provided id into uuid", http.StatusBadRequest)
 			return
 		}
@@ -266,19 +266,19 @@ func (e *Enforcer) SetDefaultAdminRoute() {
 		if _, exists := claims["/"]; exists {
 			beforeUpdateUser, err = e.auth.GetUserByID(r.Context(), usrID)
 			if err != nil {
-				e.logger.Error(err, "unable to list user with uuid", "uuid", usrID.String())
+				e.log.Error("unable to list user with uuid", "uuid", usrID.String(), "err", err)
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
 		}
 
 		if err := e.auth.UpdateUserClaims(r.Context(), usrID, claims); err != nil {
-			e.logger.Error(err, "unable to update user claim")
+			e.log.Error("unable to update user claim", "err", err)
 		}
 
 		afterUpdateUser, err := e.auth.GetUserByID(r.Context(), usrID)
 		if err != nil {
-			e.logger.Error(err, "unable to list user with uuid", "uuid", usrID.String())
+			e.log.Error("unable to list user with uuid", "uuid", usrID.String(), "err", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -287,7 +287,7 @@ func (e *Enforcer) SetDefaultAdminRoute() {
 		w.Header().Set("HX-Trigger", statsUpdateHeader)
 
 		if err := templates.UserRow(afterUpdateUser).Render(r.Context(), w); err != nil {
-			e.logger.Error(err, "unable to render UserRowPartial")
+			e.log.Error("unable to render UserRowPartial", "err", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -298,20 +298,20 @@ func (e *Enforcer) SetDefaultAdminRoute() {
 		id := r.PathValue("id")
 		usrID, err := uuid.Parse(id)
 		if err != nil {
-			e.logger.Error(err, "unable to parse provided id into uuid", "id", id)
+			e.log.Error("unable to parse provided id into uuid", "id", id, "error", err)
 			http.Error(w, "unable to parse provided id into uuid", http.StatusBadRequest)
 		}
 
 		user, err := e.auth.GetUserByID(r.Context(), usrID)
 		if err != nil {
-			e.logger.Error(err, "unable to list user with uuid", "uuid", usrID.String())
+			e.log.Error("unable to list user with uuid", "uuid", usrID.String(), "err", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
 		// TODO: add persistent logging for This kind of thing
 		if err := e.auth.HardDeleteUser(r.Context(), usrID); err != nil {
-			e.logger.Error(err, "unable to delete user", "id", id)
+			e.log.Error("unable to delete user", "id", id, "err", err)
 			http.Error(w, "unable to delete user", http.StatusInternalServerError)
 		}
 
@@ -339,19 +339,19 @@ func (e *Enforcer) SetDefaultAdminRoute() {
 		id := r.PathValue("id")
 		usrID, err := uuid.Parse(id)
 		if err != nil {
-			e.logger.Error(err, "unable to parse provided id into uuid", "id", id)
+			e.log.Error("unable to parse provided id into uuid", "id", id, "err", err)
 			http.Error(w, "unable to parse provided id into uuid", http.StatusBadRequest)
 			return
 		}
 
 		if err := e.auth.SoftDeleteUser(r.Context(), usrID); err != nil {
-			e.logger.Error(err, "unable to disable user", "id", id)
+			e.log.Error("unable to disable user", "id", id, "err", err)
 			http.Error(w, "unable to disable user", http.StatusInternalServerError)
 		}
 
 		user, err := e.auth.GetUserByID(r.Context(), usrID)
 		if err != nil {
-			e.logger.Error(err, "unable to list user with uuid", "uuid", usrID.String())
+			e.log.Error("unable to list user with uuid", "uuid", usrID.String(), "err", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -360,7 +360,7 @@ func (e *Enforcer) SetDefaultAdminRoute() {
 		w.Header().Set("HX-Trigger", statsUpdateHeader)
 
 		if err := templates.UserRow(user).Render(r.Context(), w); err != nil {
-			e.logger.Error(err, "unable to render UserRowPartial")
+			e.log.Error("unable to render UserRowPartial", "err", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -371,19 +371,19 @@ func (e *Enforcer) SetDefaultAdminRoute() {
 		id := r.PathValue("id")
 		usrID, err := uuid.Parse(id)
 		if err != nil {
-			e.logger.Error(err, "unable to parse provided id into uuid", "id", id)
+			e.log.Error("unable to parse provided id into uuid", "id", id, "err", err)
 			http.Error(w, "unable to parse provided id into uuid", http.StatusBadRequest)
 			return
 		}
 
 		if err := e.auth.RestoreUser(r.Context(), usrID); err != nil {
-			e.logger.Error(err, "unable to enable user", "id", id)
+			e.log.Error("unable to enable user", "id", id, "err", err)
 			http.Error(w, "unable to enable user", http.StatusInternalServerError)
 		}
 
 		user, err := e.auth.GetUserByID(r.Context(), usrID)
 		if err != nil {
-			e.logger.Error(err, "unable to list user with uuid", "uuid", usrID.String())
+			e.log.Error("unable to list user with uuid", "uuid", usrID.String(), "err", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -392,7 +392,7 @@ func (e *Enforcer) SetDefaultAdminRoute() {
 		w.Header().Set("HX-Trigger", statsUpdateHeader)
 
 		if err := templates.UserRow(user).Render(r.Context(), w); err != nil {
-			e.logger.Error(err, "unable to render UserRowPartial")
+			e.log.Error("unable to render UserRowPartial", "err", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}

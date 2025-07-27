@@ -5,11 +5,11 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
 
-	"github.com/go-logr/logr"
 	"github.com/google/uuid"
 )
 
@@ -21,7 +21,7 @@ type Session struct {
 	CreatedAt time.Time  // When the session was created
 }
 
-func NewInMemory(logger logr.Logger) *inMemorySessionStore {
+func NewInMemory(logger *slog.Logger) *inMemorySessionStore {
 	s := &inMemorySessionStore{
 		baseSessionStore: NewBase(logger),
 		sessions:         make(map[string]*Session),

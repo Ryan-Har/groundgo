@@ -2,6 +2,8 @@ package access
 
 import (
 	"errors"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -30,6 +32,7 @@ func createTestEnforcer() *Enforcer {
 	return &Enforcer{
 		router:   &mockRouter{},
 		handlers: make(map[string]map[string]http.Handler),
+		log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 }
 
@@ -93,10 +96,8 @@ func TestHandle_Success(t *testing.T) {
 }
 
 func TestHandle_InitializesHandlersMap(t *testing.T) {
-	e := &Enforcer{
-		router: &mockRouter{},
-		// handlers is nil initially
-	}
+	e := createTestEnforcer()
+	e.handlers = nil // handlers is nil initially
 
 	err := e.Handle("GET /test", http.HandlerFunc(dummyHandler))
 	if err != nil {

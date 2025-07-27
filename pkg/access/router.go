@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
+
+	"github.com/Ryan-Har/groundgo/internal/logutil"
 )
 
 // Router defines an abstraction for registering routes and applying middleware.
@@ -24,10 +27,10 @@ type Router interface {
 // The handler is automatically dynamically wrapped with authentication and
 // authorization middlewares based on policies set with SetPolicy.
 func (e *Enforcer) Handle(route string, handler http.Handler) error {
-	e.logger.V(1).Info("enforcer handling route", "route", route)
+	e.log.Debug("enforcer handling route", "route", route)
 	if handler == nil {
 		err := fmt.Errorf("cannot register nil handler for route")
-		e.logger.Error(err, fmt.Sprintf("route %s", route))
+		e.log.Error("cannot register nil handler for route", "route", route)
 		return err
 	}
 
@@ -44,7 +47,7 @@ func (e *Enforcer) Handle(route string, handler http.Handler) error {
 
 		// Register the dispatching handler once
 		e.router.Handle(path, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			e.logger.V(3).Info("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
+			defer logutil.NewTimingLogger(e.log, time.Now(), "access handled", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())()
 			methodHandlers := e.handlers[path]
 
 			// Try exact method match first
@@ -68,12 +71,8 @@ func (e *Enforcer) Handle(route string, handler http.Handler) error {
 
 	// Check for duplicate route
 	if _, exists := e.handlers[path][method]; exists {
-		err := &DuplicatePathAndMethodError{
-			Path:   path,
-			Method: method,
-		}
-		e.logger.Error(err, "ERROR", "path", path, "method", method)
-		return err
+		return logutil.LogAndWrapErr(e.log, "attempted to add duplicate path to endorcer",
+			NewDuplicatePathAndMethodError(path, method))
 	}
 
 	// Store handler
@@ -120,6 +119,13 @@ var ErrDuplicatePathAndMethod = &DuplicatePathAndMethodError{}
 type DuplicatePathAndMethodError struct {
 	Method string
 	Path   string
+}
+
+func NewDuplicatePathAndMethodError(path, method string) *DuplicatePathAndMethodError {
+	return &DuplicatePathAndMethodError{
+		Method: method,
+		Path:   path,
+	}
 }
 
 func (e *DuplicatePathAndMethodError) Error() string {

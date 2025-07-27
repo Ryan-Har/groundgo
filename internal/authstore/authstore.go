@@ -3,14 +3,14 @@ package authstore
 import (
 	"context"
 	"database/sql"
+	"log/slog"
 
 	"github.com/Ryan-Har/groundgo/internal/db/sqliteDB"
 	"github.com/Ryan-Har/groundgo/pkg/models"
-	"github.com/go-logr/logr"
 	"github.com/google/uuid"
 )
 
-func NewWithSqliteStore(db *sql.DB, logger logr.Logger) *sqliteAuthStore {
+func NewWithSqliteStore(db *sql.DB, logger *slog.Logger) *sqliteAuthStore {
 	return &sqliteAuthStore{
 		db:      db,
 		queries: *sqliteDB.New(db),

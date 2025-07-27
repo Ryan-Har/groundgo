@@ -4,142 +4,155 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/Ryan-Har/groundgo/internal/db/sqliteDB"
+	"github.com/Ryan-Har/groundgo/internal/logutil"
 	"github.com/Ryan-Har/groundgo/pkg/models"
 	"github.com/Ryan-Har/groundgo/pkg/models/passwd"
 	"github.com/Ryan-Har/groundgo/pkg/models/transform"
-	"github.com/go-logr/logr"
 	"github.com/google/uuid"
 )
 
 type sqliteAuthStore struct {
 	db      *sql.DB
 	queries sqliteDB.Queries
-	log     logr.Logger
+	log     *slog.Logger
 }
 
 func (s *sqliteAuthStore) Ping() error {
-	s.log.V(0).Info("attempting ping of database")
 	return s.db.Ping()
 }
 
-// newTimingLogger returns a function that, when deferred, logs the elapsed time at an info level.
-// It initial fields that you want to include in the final log message.
-func (s *sqliteAuthStore) newTimingLogger(start time.Time, msg string, initialFields ...any) func() {
-	return func() {
-		elapsed := time.Since(start)
-		finalFields := append(initialFields, "duration", elapsed.String())
-		s.log.V(3).Info(msg, finalFields...)
-	}
-}
-
 func (s *sqliteAuthStore) CheckEmailExists(ctx context.Context, email string) (bool, error) {
-	defer s.newTimingLogger(time.Now(), "executed sql query", "method", "CheckEmailExists", "args", map[string]any{"email": email})()
+	defer logutil.NewTimingLogger(s.log, time.Now(), "executed sql query", "method", "CheckEmailExists")()
 	i, err := s.queries.CheckEmailExists(ctx, email)
 	return i != 0, err
 }
 
 func (s *sqliteAuthStore) CreateUser(ctx context.Context, args models.CreateUserParams) (*models.User, error) {
-	defer s.newTimingLogger(time.Now(), "executed sql query", "method", "CreateUser", "args", map[string]any{"email": args.Email, "role": args.Role})()
+	defer logutil.NewTimingLogger(s.log, time.Now(), "executed sql query", "method", "CreateUser")()
+	errMsg := "failed to create user"
 
 	// set the root to the provided role
 	if args.Role.IsValid() {
 		args.Claims.AddRole("/", models.Role(args.Role))
 	} else {
-		err := errors.New("invalid role provided")
-		s.log.Error(err, "creating user")
-		return nil, models.NewValidationError(err.Error())
+		return nil, logutil.LogAndWrapErr(s.log, errMsg,
+			models.NewValidationError(fmt.Sprintf("invalid role: %s", args.Role.String())),
+		)
 	}
 
 	params, err := transform.ToSQLiteCreateUserParams(args)
 	if err != nil {
-		s.log.Error(err, "creating user")
-		return nil, models.NewTransformationError(err.Error())
+		return nil, logutil.LogAndWrapErr(s.log, errMsg,
+			models.NewTransformationError(err.Error()),
+		)
 	}
 	//generate UUID manually for sqlite
 	params.ID = uuid.NewString()
 
 	sqlUser, err := s.queries.CreateUser(ctx, params)
 	if err != nil {
-		s.log.Error(err, "creating user")
-		return nil, models.NewDatabaseError("failed to create user", err)
+		return nil, logutil.LogAndWrapErr(s.log, errMsg,
+			models.NewDatabaseError(err.Error()),
+		)
 	}
 	user, err := transform.FromSQLiteUser(sqlUser)
 	if err != nil {
-		s.log.Error(err, "transforming user")
-		return nil, models.NewTransformationError(err.Error())
+		return nil, logutil.LogAndWrapErr(s.log, errMsg,
+			models.NewTransformationError(err.Error()),
+		)
 	}
 	return &user, nil
 }
 
 func (s *sqliteAuthStore) GetUserByEmail(ctx context.Context, email string) (*models.User, error) {
-	defer s.newTimingLogger(time.Now(), "executed sql query", "method", "GetUserByEmail", "args", map[string]any{"email": email})()
+	defer logutil.NewTimingLogger(s.log, time.Now(), "executed sql query", "method", "GetUserByEmail")()
+	errMsg := "failed to get user by email"
+
 	sqlUser, err := s.queries.GetUserByEmail(ctx, email)
 	if err != nil {
-		return nil, models.NewDatabaseError("failed to get user by email", err)
+		return nil, logutil.DebugAndWrapErr(s.log, errMsg,
+			models.NewDatabaseError(err.Error()),
+		)
 	}
 	user, err := transform.FromSQLiteUser(sqlUser)
 	if err != nil {
-		s.log.Error(err, "transforming user")
-		return nil, models.NewTransformationError(err.Error())
+		return nil, logutil.LogAndWrapErr(s.log, errMsg,
+			models.NewTransformationError(err.Error()),
+		)
 	}
 	return &user, nil
 }
 
 func (s *sqliteAuthStore) GetUserByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
-	defer s.newTimingLogger(time.Now(), "executed sql query", "method", "GetUserByID", "args", map[string]any{"ID": id.String()})()
+	defer logutil.NewTimingLogger(s.log, time.Now(), "executed sql query", "method", "GetUserByID", "ID", id.String())()
+	errMsg := "failed to get user by id"
 
 	if id == uuid.Nil {
-		return nil, models.NewValidationError("id not set")
+		return nil, logutil.DebugAndWrapErr(s.log, errMsg,
+			models.NewValidationError("id not set"),
+		)
 	}
 
 	sqlUser, err := s.queries.GetUserByID(ctx, id.String())
 	if err != nil {
-		return nil, models.NewDatabaseError("failed to get user by id", err)
+		return nil, logutil.DebugAndWrapErr(s.log, errMsg,
+			models.NewDatabaseError(err.Error()),
+		)
 	}
 	user, err := transform.FromSQLiteUser(sqlUser)
 	if err != nil {
-		s.log.Error(err, "transforming user")
-		return nil, models.NewTransformationError(err.Error())
+		return nil, logutil.LogAndWrapErr(s.log, errMsg,
+			models.NewTransformationError(err.Error()),
+		)
 	}
 
 	return &user, nil
 }
 
 func (s *sqliteAuthStore) GetUserByOAuth(ctx context.Context, args models.UserOAuthParams) (*models.User, error) {
-	defer s.newTimingLogger(time.Now(), "executed sql query", "method", "GetUserByOAuth", "args", args)()
+	defer logutil.NewTimingLogger(s.log, time.Now(), "executed sql query", "method", "GetUserByOAuth")()
+	errMsg := "failed to get user by oauth"
 
 	if args.OauthID == "" || args.OauthProvider == "" {
-		msg := "params contain empty string"
-		s.log.V(1).Info(msg, args)
-		return nil, models.NewValidationError(msg)
+		return nil, logutil.DebugAndWrapErr(s.log, errMsg,
+			models.NewValidationError("id or provider not set"),
+		)
 	}
 
 	params := transform.ToGetUserByOAuthParams(args)
 
 	sqlUser, err := s.queries.GetUserByOAuth(ctx, params)
 	if err != nil {
-		return nil, models.NewDatabaseError("failed to get user by oauth", err)
+		return nil, logutil.DebugAndWrapErr(s.log, errMsg,
+			models.NewDatabaseError(err.Error()),
+		)
 	}
 
 	user, err := transform.FromSQLiteUser(sqlUser)
 	if err != nil {
-		s.log.Error(err, "transforming user")
-		return nil, models.NewTransformationError(err.Error())
+		return nil, logutil.LogAndWrapErr(s.log, errMsg,
+			models.NewTransformationError(err.Error()),
+		)
 	}
 	return &user, nil
 }
 
 func (s *sqliteAuthStore) ListAllUsers(ctx context.Context) ([]*models.User, error) {
-	defer s.newTimingLogger(time.Now(), "executed sql query", "method", "ListAllUsers")()
+	defer logutil.NewTimingLogger(s.log, time.Now(), "executed sql query", "method", "ListAllUsers")()
+	errMsg := "failed to list all users"
 
 	var users []*models.User
 
 	sqlUsers, err := s.queries.ListAllUsers(ctx)
 	if err != nil {
-		return users, models.NewDatabaseError("failed to list all users", err)
+		return users, logutil.DebugAndWrapErr(s.log, errMsg,
+			models.NewDatabaseError(err.Error()),
+		)
 	}
 
 	var errs []error
@@ -162,10 +175,13 @@ func (s *sqliteAuthStore) ListAllUsers(ctx context.Context) ([]*models.User, err
 }
 
 func (s *sqliteAuthStore) SoftDeleteUser(ctx context.Context, id uuid.UUID) error {
-	defer s.newTimingLogger(time.Now(), "executed sql query", "method", "SoftDeleteUser", "args", map[string]any{"ID": id.String()})()
+	defer logutil.NewTimingLogger(s.log, time.Now(), "executed sql query", "method", "SoftDeleteUser", "ID", id.String())()
+	errMsg := "failed to soft delete user"
 
 	if id == uuid.Nil {
-		return models.NewValidationError("id not set")
+		return logutil.DebugAndWrapErr(s.log, errMsg,
+			models.NewValidationError("id not set"),
+		)
 	}
 
 	err := s.queries.UpdateUserIsActive(ctx, sqliteDB.UpdateUserIsActiveParams{
@@ -174,16 +190,21 @@ func (s *sqliteAuthStore) SoftDeleteUser(ctx context.Context, id uuid.UUID) erro
 	})
 
 	if err != nil {
-		return models.NewDatabaseError("failed to soft delete user", err)
+		return logutil.DebugAndWrapErr(s.log, errMsg,
+			models.NewDatabaseError(err.Error()),
+		)
 	}
 	return nil
 }
 
 func (s *sqliteAuthStore) RestoreUser(ctx context.Context, id uuid.UUID) error {
-	defer s.newTimingLogger(time.Now(), "executed sql query", "method", "RestoreUser", "args", map[string]any{"ID": id.String()})()
+	defer logutil.NewTimingLogger(s.log, time.Now(), "executed sql query", "method", "RestoreUser", "ID", id.String())()
+	errMsg := "failed to restore user"
 
 	if id == uuid.Nil {
-		return models.NewValidationError("id not set")
+		return logutil.DebugAndWrapErr(s.log, errMsg,
+			models.NewValidationError("id not set"),
+		)
 	}
 
 	err := s.queries.UpdateUserIsActive(ctx, sqliteDB.UpdateUserIsActiveParams{
@@ -192,42 +213,56 @@ func (s *sqliteAuthStore) RestoreUser(ctx context.Context, id uuid.UUID) error {
 	})
 
 	if err != nil {
-		return models.NewDatabaseError("failed to restore user", err)
+		return logutil.DebugAndWrapErr(s.log, errMsg,
+			models.NewDatabaseError(err.Error()),
+		)
 	}
 	return nil
 }
 
 func (s *sqliteAuthStore) HardDeleteUser(ctx context.Context, id uuid.UUID) error {
-	defer s.newTimingLogger(time.Now(), "executed sql query", "method", "HardDeleteUser", "args", map[string]any{"ID": id.String()})()
+	defer logutil.NewTimingLogger(s.log, time.Now(), "executed sql query", "method", "HardDeleteUser", "ID", id.String())()
+	errMsg := "failed to hard delete user"
 
 	if id == uuid.Nil {
-		return models.NewValidationError("id not set")
+		return logutil.DebugAndWrapErr(s.log, errMsg,
+			models.NewValidationError("id not set"),
+		)
 	}
 
 	err := s.queries.DeleteUser(ctx, id.String())
 
 	if err != nil {
-		return models.NewDatabaseError("failed to hard delete user", err)
+		return logutil.DebugAndWrapErr(s.log, errMsg,
+			models.NewDatabaseError(err.Error()),
+		)
 	}
 	return nil
 }
 
 // TODO
 func (s *sqliteAuthStore) UpdateUserRole(ctx context.Context, id uuid.UUID, role models.Role) error {
-	defer s.newTimingLogger(time.Now(), "executed sql query", "method", "UpdateUserRole", "args", map[string]any{"ID": id.String(), "role": role.String()})()
+	defer logutil.NewTimingLogger(s.log, time.Now(), "executed sql query", "method", "UpdateUserRole", "ID", id.String())()
+	errMsg := "failed to update user role"
 
 	if id == uuid.Nil {
-		return models.NewValidationError("id not set")
+		return logutil.DebugAndWrapErr(s.log, errMsg,
+			models.NewValidationError("id not set"),
+		)
 	}
 
 	user, err := s.queries.GetUserByID(ctx, id.String())
 	if err != nil {
-		return models.NewDatabaseError("failed to fetch user for role update", err)
+		return logutil.DebugAndWrapErr(s.log, errMsg,
+			models.NewDatabaseError(err.Error()),
+		)
 	}
 
 	userClaims, err := transform.ParseClaims(user.Claims)
 	if err != nil {
-		return models.NewTransformationError(err.Error())
+		return logutil.LogAndWrapErr(s.log, errMsg,
+			models.NewTransformationError(err.Error()),
+		)
 	}
 
 	// Update the root claim ("/") to match the new role
@@ -236,7 +271,9 @@ func (s *sqliteAuthStore) UpdateUserRole(ctx context.Context, id uuid.UUID, role
 	// Marshal updated claims
 	claimsStr, err := transform.SerializeClaims(userClaims)
 	if err != nil {
-		return models.NewTransformationError(err.Error())
+		return logutil.LogAndWrapErr(s.log, errMsg,
+			models.NewTransformationError(err.Error()),
+		)
 	}
 
 	// Update the user's role and claims
@@ -246,25 +283,32 @@ func (s *sqliteAuthStore) UpdateUserRole(ctx context.Context, id uuid.UUID, role
 		Claims: claimsStr,
 	})
 	if err != nil {
-		return models.NewDatabaseError("failed to update user role", err)
+		return logutil.DebugAndWrapErr(s.log, errMsg,
+			models.NewDatabaseError(err.Error()),
+		)
 	}
 
 	return nil
 }
 
 func (s *sqliteAuthStore) UpdateUserClaims(ctx context.Context, id uuid.UUID, claims models.Claims) error {
-	defer s.newTimingLogger(time.Now(), "executed sql query", "method", "UpdateUserClaims", "args", map[string]any{"ID": id.String(), "claims": claims})()
+	defer logutil.NewTimingLogger(s.log, time.Now(), "executed sql query", "method", "UpdateUserClaims", "ID", id.String())()
+	errMsg := "failed to update user claims"
 
 	if id == uuid.Nil {
-		return models.NewValidationError("id not set")
+		return logutil.DebugAndWrapErr(s.log, errMsg,
+			models.NewValidationError("id not set"),
+		)
 	}
 
 	user, err := s.queries.GetUserByID(ctx, id.String())
 	if err != nil {
-		return models.NewDatabaseError("failed to fetch user for claim update", err)
+		return logutil.DebugAndWrapErr(s.log, errMsg,
+			models.NewDatabaseError(err.Error()),
+		)
 	}
 
-	// role must be updated if the root claim is. If now, the root claim should be added.
+	// role must be updated if the root claim is. If not, the root claim should be added to allow for role based access
 	_, exists := claims["/"]
 	if !exists {
 		claims["/"] = models.Role(user.Role)
@@ -272,7 +316,9 @@ func (s *sqliteAuthStore) UpdateUserClaims(ctx context.Context, id uuid.UUID, cl
 
 	claimsStr, err := transform.SerializeClaims(claims)
 	if err != nil {
-		return models.NewTransformationError(err.Error())
+		return logutil.LogAndWrapErr(s.log, errMsg,
+			models.NewTransformationError(err.Error()),
+		)
 	}
 
 	// Update the user's role and claims
@@ -283,22 +329,29 @@ func (s *sqliteAuthStore) UpdateUserClaims(ctx context.Context, id uuid.UUID, cl
 	})
 
 	if err != nil {
-		return models.NewDatabaseError("failed to update user claims", err)
+		return logutil.DebugAndWrapErr(s.log, errMsg,
+			models.NewDatabaseError(err.Error()),
+		)
 	}
 
 	return nil
 }
 
 func (s *sqliteAuthStore) UpdateUserPassword(ctx context.Context, id uuid.UUID, password string) error {
-	defer s.newTimingLogger(time.Now(), "executed sql query", "method", "UpdateUserPassword", "args", map[string]any{"ID": id.String()})()
+	defer logutil.NewTimingLogger(s.log, time.Now(), "executed sql query", "method", "UpdateUserPassword", "ID", id.String())()
+	errMsg := "failed to update user password"
 
 	if id == uuid.Nil {
-		return models.NewValidationError("id not set")
+		return logutil.DebugAndWrapErr(s.log, errMsg,
+			models.NewValidationError("id not set"),
+		)
 	}
 
 	hashed, err := passwd.HashPassword(password)
 	if err != nil {
-		return models.NewTransformationError("failed to hash password")
+		return logutil.LogAndWrapErr(s.log, errMsg,
+			models.NewTransformationError(err.Error()),
+		)
 	}
 
 	err = s.queries.UpdateUserPassword(ctx, sqliteDB.UpdateUserPasswordParams{
@@ -306,7 +359,9 @@ func (s *sqliteAuthStore) UpdateUserPassword(ctx context.Context, id uuid.UUID, 
 		PasswordHash: &hashed,
 	})
 	if err != nil {
-		return models.NewDatabaseError("failed to update password", err)
+		return logutil.DebugAndWrapErr(s.log, errMsg,
+			models.NewDatabaseError(err.Error()),
+		)
 	}
 	return nil
 }

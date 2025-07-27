@@ -57,24 +57,17 @@ var ErrTransformation = &TransformationError{}
 // Will only be provided as a response from internal stores.
 type DatabaseError struct {
 	msg string
-	err error
 }
 
 // Error implements the error interface.
 func (e *DatabaseError) Error() string {
-	return fmt.Sprintf("database error: %s: %v", e.msg, e.err)
-}
-
-// Unwrap allows errors.Unwrap to access the underlying error.
-func (e *DatabaseError) Unwrap() error {
-	return e.err
+	return fmt.Sprintf("database error: %s", e.msg)
 }
 
 // NewDatabaseError creates a new DatabaseError.
-func NewDatabaseError(msg string, err error) error {
+func NewDatabaseError(msg string) error {
 	return &DatabaseError{
 		msg: msg,
-		err: err,
 	}
 }
 

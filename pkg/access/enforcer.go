@@ -1,20 +1,20 @@
 package access
 
 import (
+	"log/slog"
 	"net/http"
 	"strings"
 
 	"github.com/Ryan-Har/groundgo/internal/authstore"
 	"github.com/Ryan-Har/groundgo/internal/sessionstore"
 	"github.com/Ryan-Har/groundgo/pkg/models"
-	"github.com/go-logr/logr"
 )
 
 // Enforcer manages access control policies and wraps route handlers with
 // authentication and authorization logic. It is typically used to guard routes
 // based on roles defined in the Policies map.
 type Enforcer struct {
-	logger   logr.Logger
+	log      *slog.Logger
 	Policies map[string]map[string]models.Role  // e.g route: {Get: RoleUser, Post: RoleAdmin}
 	handlers map[string]map[string]http.Handler // path -> method -> handler internal mapping
 	router   Router                             // used for middlewares and creating routes
@@ -42,9 +42,9 @@ type Enforcer struct {
 // Example:
 //
 //	enforcer := NewEnforcer(logger, router, authStore, sessionStore)
-func NewEnforcer(logger logr.Logger, router Router, auth authstore.Store, sess sessionstore.Store) *Enforcer {
+func NewEnforcer(logger *slog.Logger, router Router, auth authstore.Store, sess sessionstore.Store) *Enforcer {
 	return &Enforcer{
-		logger:   logger,
+		log:      logger,
 		Policies: map[string]map[string]models.Role{},
 		router:   router,
 		auth:     auth,
@@ -66,28 +66,27 @@ func (e *Enforcer) SetPolicy(resourcePath string, method string, requiredRole mo
 func (e *Enforcer) FindMatchingPolicy(resourcePath, method string) (models.Role, bool) {
 	method = strings.ToUpper(method)
 
-	e.logger.V(0).Info("enforcer is finding matching policy",
-		"resource_path", resourcePath,
-		"method", method)
-
 	// Build all prefixes from most specific to least
 	pathsToCheck := buildPrefixes(resourcePath)
 
-	e.logger.V(4).Info("Paths to check for policy", "order", pathsToCheck)
+	e.log.Debug("enforcer is finding matching policy",
+		"resource path", resourcePath,
+		"method", method,
+		"paths to check", pathsToCheck,
+	)
 
 	for _, p := range pathsToCheck {
 		if methodPolicies, ok := e.Policies[p]; ok {
-			e.logger.V(4).Info("Policy found for path, checking methods", "path", p, "available_methods", methodPolicies)
 
 			// 1. Exact method match
 			if requiredRole, methodOk := methodPolicies[method]; methodOk {
+				e.log.Debug("enforcer matched policy for path", "path", p, "available_methods", methodPolicies)
 				return requiredRole, true
 			}
 
-			e.logger.V(1).Info("No exact method policy found for path, checking wildcard", "path", p, "method", method)
-
 			// 2. Wildcard match
 			if requiredRole, anyMethodOk := methodPolicies["*"]; anyMethodOk {
+				e.log.Debug("enforcer matched wildcard policy for path", "path", p, "available_methods", methodPolicies)
 				return requiredRole, true
 			}
 		}
