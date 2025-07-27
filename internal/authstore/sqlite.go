@@ -6,7 +6,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/Ryan-Har/groundgo/database"
 	"github.com/Ryan-Har/groundgo/internal/db/sqliteDB"
 	"github.com/Ryan-Har/groundgo/pkg/models"
 	"github.com/Ryan-Har/groundgo/pkg/models/passwd"
@@ -24,12 +23,6 @@ type sqliteAuthStore struct {
 func (s *sqliteAuthStore) Ping() error {
 	s.log.V(0).Info("attempting ping of database")
 	return s.db.Ping()
-}
-
-func (s *sqliteAuthStore) RunMigrations() error {
-	defer s.newTimingLogger(time.Now(), "ran database migrations")()
-	s.log.V(0).Info("running auth database migrations")
-	return database.RunSqliteMigrations(s.db)
 }
 
 // newTimingLogger returns a function that, when deferred, logs the elapsed time at an info level.

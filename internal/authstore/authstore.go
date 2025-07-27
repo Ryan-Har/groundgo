@@ -27,8 +27,6 @@ func NewWithSqliteStore(db *sql.DB, logger logr.Logger) *sqliteAuthStore {
 //
 // The returned models must be portable and backend-agnostic (i.e., not tied to any backend schema).
 type Store interface {
-	// RunMigrations applies any necessary schema changes to prepare the database.
-	RunMigrations() error
 
 	// CheckEmailExists returns true if a user with the specified email exists in the datastore.
 	CheckEmailExists(ctx context.Context, email string) (bool, error)

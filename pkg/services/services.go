@@ -2,7 +2,9 @@ package services
 
 import (
 	"database/sql"
+	"errors"
 
+	"github.com/Ryan-Har/groundgo/database"
 	"github.com/Ryan-Har/groundgo/internal/authstore"
 	"github.com/Ryan-Har/groundgo/internal/sessionstore"
 	"github.com/go-logr/logr"
@@ -13,6 +15,7 @@ type Services struct {
 	logger  logr.Logger
 	Auth    authstore.Store
 	Session sessionstore.Store
+	dbType  DBType
 }
 
 type DBType string
@@ -51,4 +54,15 @@ func New(db *sql.DB, dbType DBType, logger logr.Logger, sessionInMemory bool) *S
 		svc.Auth = authstore.NewWithSqliteStore(svc.db, svc.logger)
 	}
 	return svc
+}
+
+func (s *Services) RunMigrations() error {
+	switch s.dbType {
+	case DBTypeSQLite:
+		//defer s.newTimingLogger(time.Now(), "ran database migrations")()
+		//s.log.V(0).Info("running auth database migrations")
+		return database.RunSqliteMigrations(s.db)
+	default:
+		return errors.New("unknown database type")
+	}
 }
