@@ -1,7 +1,7 @@
 package access
 
 import (
-	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 )
@@ -19,10 +19,18 @@ type Router interface {
 //	"METHOD /path"   // matches only HTTP requests with METHOD (GET, POST, etc.)
 //
 // If the method is omitted, it defaults to all methods.
+// If the path is omitted, it defaults to the root path with the provided method
+// If the combination of Method and path is already set, an error will be returned
 // The handler is automatically dynamically wrapped with authentication and
 // authorization middlewares based on policies set with SetPolicy.
-func (e *Enforcer) Handle(route string, handler http.Handler) {
+func (e *Enforcer) Handle(route string, handler http.Handler) error {
 	e.logger.V(1).Info("enforcer handling route", "route", route)
+	if handler == nil {
+		err := fmt.Errorf("cannot register nil handler for route")
+		e.logger.Error(err, fmt.Sprintf("route %s", route))
+		return err
+	}
+
 	method, path := parseRoute(route)
 
 	// Initialize handler map if not already
@@ -60,20 +68,25 @@ func (e *Enforcer) Handle(route string, handler http.Handler) {
 
 	// Check for duplicate route
 	if _, exists := e.handlers[path][method]; exists {
-		err := errors.New("enforcer: duplicate route attempted")
+		err := &DuplicatePathAndMethodError{
+			Path:   path,
+			Method: method,
+		}
 		e.logger.Error(err, "ERROR", "path", path, "method", method)
+		return err
 	}
 
 	// Store handler
 	e.handlers[path][method] = handler
+	return nil
 }
 
 // HandleFunc is a convenience wrapper around Handle that accepts
 // an http.HandlerFunc instead of a full http.Handler.
 // It registers the handler function with authentication and authorization
 // middlewares applied according to Enforcer policies.
-func (e *Enforcer) HandleFunc(route string, handlerFunc http.HandlerFunc) {
-	e.Handle(route, handlerFunc)
+func (e *Enforcer) HandleFunc(route string, handlerFunc http.HandlerFunc) error {
+	return e.Handle(route, handlerFunc)
 }
 
 // parseRoute parses a route string into method and path components.
@@ -90,8 +103,30 @@ func parseRoute(route string) (method, path string) {
 	case 0:
 		return "", "/" // fallback to root
 	case 1:
-		return "", parts[0] // any method
+		// If it starts with "/" treat as path, otherwise treat as invalid
+		if strings.HasPrefix(parts[0], "/") {
+			return "", parts[0] // any method
+		}
+		// method but no path
+		return "", "/"
 	default:
-		return strings.ToUpper(parts[0]), parts[1] // e.g. GET /admin
+		return strings.ToUpper(parts[0]), strings.ToLower(parts[1]) // e.g. GET /admin
 	}
+}
+
+var ErrDuplicatePathAndMethod = &DuplicatePathAndMethodError{}
+
+// errors
+type DuplicatePathAndMethodError struct {
+	Method string
+	Path   string
+}
+
+func (e *DuplicatePathAndMethodError) Error() string {
+	return fmt.Sprintf("enforcer: duplicate path: %s and method: %s attempted", e.Path, e.Method)
+}
+
+func (e *DuplicatePathAndMethodError) Is(target error) bool {
+	_, ok := target.(*DuplicatePathAndMethodError)
+	return ok
 }

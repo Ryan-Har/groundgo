@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/Ryan-Har/groundgo"
+	"github.com/Ryan-Har/groundgo/pkg/models"
 	"github.com/go-logr/logr"
 )
 
@@ -40,10 +41,12 @@ func main() {
 	}
 
 	gg.Enforcer.LoadDefaultPolicies()
-	gg.Enforcer.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Hello from the main application root!"))
-	})
+	// gg.Enforcer.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+	// 	w.Write([]byte("Hello from the main application root!"))
+	// })
 	gg.Enforcer.LoadDefaultRoutes()
+	gg.Enforcer.SetPolicy("/admin/users/{id}", "*", models.RoleSystemAdmin)
+	mainMux.Handle("GET /", nil)
 	//gg.Enforcer.SetPolicy("/admin", "*", models.RoleAdmin)
 	// gg.Enforcer.HandleFunc("GET /admin", func(w http.ResponseWriter, r *http.Request) {
 	// 	w.Write([]byte("Hello from the main application admin page!"))

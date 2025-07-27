@@ -4,8 +4,6 @@ import (
 	"net/http"
 	"strings"
 
-	"slices"
-
 	"github.com/Ryan-Har/groundgo/internal/authstore"
 	"github.com/Ryan-Har/groundgo/internal/sessionstore"
 	"github.com/Ryan-Har/groundgo/pkg/models"
@@ -63,55 +61,74 @@ func (e *Enforcer) SetPolicy(resourcePath string, method string, requiredRole mo
 	e.Policies[resourcePath][strings.ToUpper(method)] = requiredRole // Store method in uppercase
 }
 
-// findMatchingPolicy finds the most specific policy for a given resource path and method.
+// FindMatchingPolicy finds the most specific policy for a given resource path and method.
 // It prioritizes exact method matches over wildcard method matches.
 func (e *Enforcer) FindMatchingPolicy(resourcePath, method string) (models.Role, bool) {
-	method = strings.ToUpper(method) // Ensure method is uppercase for consistent lookup
+	method = strings.ToUpper(method)
 
-	e.logger.V(0).Info("enforcer is finding matching policy", "resource_path", resourcePath, "method", method)
+	e.logger.V(0).Info("enforcer is finding matching policy",
+		"resource_path", resourcePath,
+		"method", method)
 
-	// Try finding an exact match for the path first (exact or prefix)
-	// We'll iterate through paths from most specific to least specific
-	pathsToCheck := []string{resourcePath}
-	segments := strings.Split(resourcePath, "/")
-	currentPath := ""
-	for i := len(segments) - 1; i >= 0; i-- { // Iterate backwards from full path to root
-		currentPath = strings.Join(segments[:i+1], "/")
-		if currentPath == "" && i == 0 { // special case for root path "/"
-			currentPath = "/"
-		} else if currentPath == "" { // skip empty segments
-			continue
-		}
-		if currentPath != resourcePath { // Add prefixes if they are different from exact path
-			pathsToCheck = append(pathsToCheck, currentPath)
-		}
-	}
-	// Ensure root path is always checked last if no other match (e.g. for `/`)
-	if !contains(pathsToCheck, "/") {
-		pathsToCheck = append(pathsToCheck, "/")
-	}
+	// Build all prefixes from most specific to least
+	pathsToCheck := buildPrefixes(resourcePath)
 
 	e.logger.V(4).Info("Paths to check for policy", "order", pathsToCheck)
 
 	for _, p := range pathsToCheck {
 		if methodPolicies, ok := e.Policies[p]; ok {
 			e.logger.V(4).Info("Policy found for path, checking methods", "path", p, "available_methods", methodPolicies)
-			// 1. Try to find an exact method match for this path
+
+			// 1. Exact method match
 			if requiredRole, methodOk := methodPolicies[method]; methodOk {
 				return requiredRole, true
 			}
+
 			e.logger.V(1).Info("No exact method policy found for path, checking wildcard", "path", p, "method", method)
-			// 2. If no exact method match, try to find a wildcard method ("*") policy for this path
+
+			// 2. Wildcard match
 			if requiredRole, anyMethodOk := methodPolicies["*"]; anyMethodOk {
 				return requiredRole, true
 			}
 		}
 	}
 
+	// No match
 	return models.RoleGuest, false
 }
 
-// Helper to check if a string is in a slice
-func contains(s []string, e string) bool {
-	return slices.Contains(s, e)
+// buildPrefixes returns a list of paths to check from most specific to least specific.
+// For "/a/b/c" it returns ["/a/b/c", "/a/b", "/a", "/"].
+// Preserves the exact path format as specified in HTTP routes.
+func buildPrefixes(path string) []string {
+	// Handle empty path or root path
+	if path == "" || path == "/" {
+		return []string{"/"}
+	}
+
+	// Split path into segments, removing empty segments from splitting
+	segments := strings.Split(strings.Trim(path, "/"), "/")
+
+	// Handle the case where path was just "/" (segments would be [""])
+	if len(segments) == 1 && segments[0] == "" {
+		return []string{"/"}
+	}
+
+	prefixes := make([]string, 0, len(segments)+1)
+
+	// Build prefixes from most specific to least specific
+	for i := len(segments); i > 0; i-- {
+		if i == 1 {
+			// For single segment, just add leading slash
+			prefixes = append(prefixes, "/"+segments[0])
+		} else {
+			// For multiple segments, join with slashes
+			prefixes = append(prefixes, "/"+strings.Join(segments[:i], "/"))
+		}
+	}
+
+	// Always ensure root "/" is last
+	prefixes = append(prefixes, "/")
+
+	return prefixes
 }
