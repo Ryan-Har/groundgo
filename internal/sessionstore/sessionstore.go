@@ -15,10 +15,10 @@ import (
 
 // Session represents the data stored for a single user session.
 type Session struct {
-	ID        string    // Unique identifier for the session (e.g., UUID)
-	UserID    uuid.UUID // ID of the user associated with this session (optional, if anonymous sessions are allowed)
-	ExpiresAt time.Time // When the session becomes invalid
-	CreatedAt time.Time // When the session was created
+	ID        string     // Unique identifier for the session (e.g., UUID)
+	UserID    *uuid.UUID // ID of the user associated with this session, optional
+	ExpiresAt time.Time  // When the session becomes invalid
+	CreatedAt time.Time  // When the session was created
 }
 
 func NewInMemory(logger logr.Logger) *inMemorySessionStore {
@@ -39,7 +39,7 @@ func NewInMemory(logger logr.Logger) *inMemorySessionStore {
 // Store defines the interface for a session store.
 type Store interface {
 	// CreateSession generates a new session, stores it, and returns the session ID.
-	Create(ctx context.Context, userID uuid.UUID) (*Session, error)
+	Create(ctx context.Context, userID *uuid.UUID) (*Session, error)
 
 	// GetSession retrieves a session by its ID.
 	// It should also handle session expiration.
@@ -54,7 +54,7 @@ type Store interface {
 
 	// DeleteUserSessions deletes all sessions associated with a specific user ID.
 	// Useful when a user changes password, logs out from all devices, or is deleted.
-	DeleteUser(ctx context.Context, userID uuid.UUID) error
+	DeleteUser(ctx context.Context, userID *uuid.UUID) error
 
 	// CleanupExpiredSessions removes all expired sessions from the store.
 	// This is crucial for in-memory stores to prevent memory leaks and should

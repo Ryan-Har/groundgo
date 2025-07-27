@@ -19,7 +19,7 @@ type inMemorySessionStore struct {
 	stopCh        chan struct{} // channel used to stop the cleanup of expired sessions
 }
 
-func (s *inMemorySessionStore) Create(ctx context.Context, userID uuid.UUID) (*Session, error) {
+func (s *inMemorySessionStore) Create(ctx context.Context, userID *uuid.UUID) (*Session, error) {
 	s.log.V(1).Info("creating session")
 
 	s.mutex.Lock()
@@ -110,7 +110,7 @@ func (s *inMemorySessionStore) Renew(ctx context.Context, sessionID string) erro
 	return nil
 }
 
-func (s *inMemorySessionStore) DeleteUser(ctx context.Context, userID uuid.UUID) error {
+func (s *inMemorySessionStore) DeleteUser(ctx context.Context, userID *uuid.UUID) error {
 	s.log.V(1).Info("deleting sessions for user", "user_id", userID)
 
 	s.mutex.Lock()

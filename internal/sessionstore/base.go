@@ -24,7 +24,7 @@ func (s *baseSessionStore) ExpireCookie(c *http.Cookie, w http.ResponseWriter) {
 	http.SetCookie(w, c)
 }
 
-func (s *baseSessionStore) createSession(id string, userID uuid.UUID, expiresIn time.Duration) *Session {
+func (s *baseSessionStore) createSession(id string, userID *uuid.UUID, expiresIn time.Duration) *Session {
 	now := time.Now()
 	return &Session{
 		ID:        id,

@@ -59,7 +59,7 @@ func (e *Enforcer) AuthenticationMiddleware(next http.Handler) http.Handler {
 
 		// existing session, get user by id
 		if session != nil {
-			user, err := e.auth.GetUserByID(r.Context(), session.UserID)
+			user, err := e.auth.GetUserByID(r.Context(), *session.UserID)
 			if err != nil || user == nil || !user.IsActive { //session exists for a disabled or deleted user
 				e.logger.Info("session request from expired unknown id", "id", session.UserID)
 				e.session.ExpireCookie(cookie, w)

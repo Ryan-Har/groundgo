@@ -19,8 +19,8 @@ type Router interface {
 //	"METHOD /path"   // matches only HTTP requests with METHOD (GET, POST, etc.)
 //
 // If the method is omitted, it defaults to all methods.
-// The handler is automatically wrapped with authentication and authorization middlewares
-// based on policies previously set with SetPolicy.
+// The handler is automatically dynamically wrapped with authentication and
+// authorization middlewares based on policies set with SetPolicy.
 func (e *Enforcer) Handle(route string, handler http.Handler) {
 	e.logger.V(1).Info("enforcer handling route", "route", route)
 	method, path := parseRoute(route)
