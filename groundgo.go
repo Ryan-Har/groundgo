@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/Ryan-Har/groundgo/pkg/access"
+	"github.com/Ryan-Har/groundgo/pkg/enforcer"
 	"github.com/Ryan-Har/groundgo/pkg/services"
 )
 
@@ -13,12 +13,12 @@ type GroundGo struct {
 	logger   *slog.Logger
 	config   *Config
 	Services *services.Services
-	Enforcer *access.Enforcer
+	Enforcer *enforcer.Enforcer
 
 	// Hold information to initialize services after configuration
 	db               *sql.DB
 	dbType           services.DBType
-	router           access.Router
+	router           enforcer.Router
 	sessionsInMemory bool // detertmines if the session store is held in memory only
 }
 
@@ -39,7 +39,7 @@ func WithSqliteDB(db *sql.DB) Option {
 	}
 }
 
-func WithRouter(r access.Router) Option {
+func WithRouter(r enforcer.Router) Option {
 	return func(g *GroundGo) {
 		g.router = r
 	}
@@ -65,7 +65,7 @@ func New(opts ...Option) (*GroundGo, error) {
 	gg.logger.Debug("groundgo services loaded")
 
 	// load enforcer
-	gg.Enforcer = access.NewEnforcer(gg.logger, gg.router, gg.Services.Auth, gg.Services.Session)
+	gg.Enforcer = enforcer.NewEnforcer(gg.logger, gg.router, gg.Services.Auth, gg.Services.Session)
 	gg.logger.Info("groundgo enforcer loaded")
 
 	// check if database is pingable
