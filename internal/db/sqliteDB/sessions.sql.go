@@ -24,7 +24,7 @@ RETURNING id, user_id, expires_at, ip_address, user_agent, created_at
 
 type CreateSessionParams struct {
 	ID        string  `json:"id"`
-	UserID    int64   `json:"userId"`
+	UserID    string  `json:"userId"`
 	ExpiresAt int64   `json:"expiresAt"`
 	IpAddress *string `json:"ipAddress"`
 	UserAgent *string `json:"userAgent"`
@@ -81,7 +81,7 @@ WHERE user_id = ?
 
 // DeleteSessionsByUserID removes all active sessions for a given user.
 // This is useful for "log out from all other devices" functionality.
-func (q *Queries) DeleteSessionsByUserID(ctx context.Context, userID int64) error {
+func (q *Queries) DeleteSessionsByUserID(ctx context.Context, userID string) error {
 	_, err := q.db.ExecContext(ctx, deleteSessionsByUserID, userID)
 	return err
 }
@@ -95,6 +95,35 @@ WHERE id = ? AND expires_at > strftime('%s', 'now')
 // It will not return a session if it has expired.
 func (q *Queries) GetSession(ctx context.Context, id string) (Session, error) {
 	row := q.db.QueryRowContext(ctx, getSession, id)
+	var i Session
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.ExpiresAt,
+		&i.IpAddress,
+		&i.UserAgent,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const renewSession = `-- name: RenewSession :one
+UPDATE sessions
+SET expires_at = ?
+WHERE id = ? AND expires_at > strftime('%s', 'now')
+RETURNING id, user_id, expires_at, ip_address, user_agent, created_at
+`
+
+type RenewSessionParams struct {
+	ExpiresAt int64  `json:"expiresAt"`
+	ID        string `json:"id"`
+}
+
+// RenewSession updates the expiration time of an active session.
+// It only updates if the session has not already expired.
+// Returns the updated session record, or no row if session is expired or missing.
+func (q *Queries) RenewSession(ctx context.Context, arg RenewSessionParams) (Session, error) {
+	row := q.db.QueryRowContext(ctx, renewSession, arg.ExpiresAt, arg.ID)
 	var i Session
 	err := row.Scan(
 		&i.ID,

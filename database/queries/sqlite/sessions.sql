@@ -33,3 +33,12 @@ WHERE user_id = ?;
 -- This should be run periodically by a background job.
 DELETE FROM sessions
 WHERE expires_at <= strftime('%s', 'now');
+
+-- name: RenewSession :one
+-- RenewSession updates the expiration time of an active session.
+-- It only updates if the session has not already expired.
+-- Returns the updated session record, or no row if session is expired or missing.
+UPDATE sessions
+SET expires_at = ?
+WHERE id = ? AND expires_at > strftime('%s', 'now')
+RETURNING *;

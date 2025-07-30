@@ -29,7 +29,7 @@ type Querier interface {
 	DeleteSession(ctx context.Context, id string) error
 	// DeleteSessionsByUserID removes all active sessions for a given user.
 	// This is useful for "log out from all other devices" functionality.
-	DeleteSessionsByUserID(ctx context.Context, userID int64) error
+	DeleteSessionsByUserID(ctx context.Context, userID string) error
 	// Deletes a user from the database by their ID.
 	DeleteUser(ctx context.Context, id string) error
 	// GetSession retrieves a single, active session by its ID.
@@ -56,6 +56,10 @@ type Querier interface {
 	// ListAuditLogsForUser retrieves a paginated list of audit events for a specific user,
 	// ordered from newest to oldest.
 	ListAuditLogsForUser(ctx context.Context, arg ListAuditLogsForUserParams) ([]AuthAuditLog, error)
+	// RenewSession updates the expiration time of an active session.
+	// It only updates if the session has not already expired.
+	// Returns the updated session record, or no row if session is expired or missing.
+	RenewSession(ctx context.Context, arg RenewSessionParams) (Session, error)
 	// RevokeToken adds a token's JTI (JWT ID) to the revocation list.
 	RevokeToken(ctx context.Context, arg RevokeTokenParams) (RevokedToken, error)
 	// Updates a user's JSON claims data and updates the 'updated_at' timestamp.

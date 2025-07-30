@@ -6,20 +6,18 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Ryan-Har/groundgo/pkg/models"
 	"github.com/google/uuid"
 )
 
 type inMemorySessionStore struct {
 	*baseSessionStore
-	sessions      map[string]*Session // sessionID -> userID
-	mutex         *sync.Mutex
-	log           *slog.Logger
-	tokenLength   int           // number of bytes used when generating tokens
-	tokenDuration time.Duration // amound of time tokens are active for
-	stopCh        chan struct{} // channel used to stop the cleanup of expired sessions
+	sessions map[string]*models.Session // sessionID -> userID
+	mutex    *sync.Mutex
+	log      *slog.Logger
 }
 
-func (s *inMemorySessionStore) Create(ctx context.Context, userID *uuid.UUID) (*Session, error) {
+func (s *inMemorySessionStore) Create(ctx context.Context, userID uuid.UUID) (*models.Session, error) {
 	s.log.Debug("creating session")
 
 	s.mutex.Lock()
@@ -33,19 +31,17 @@ func (s *inMemorySessionStore) Create(ctx context.Context, userID *uuid.UUID) (*
 	default:
 	}
 
-	sesID, err := generateSecureToken(s.tokenLength)
+	session, err := s.createSession(userID, nil, nil)
 	if err != nil {
 		return nil, err
 	}
-
-	session := s.createSession(sesID, userID, s.tokenDuration)
-	s.sessions[sesID] = session
+	s.sessions[session.ID] = session
 
 	s.log.Debug("created session", "session_id", session.ID, "user_id", session.UserID.String())
 	return session, nil
 }
 
-func (s *inMemorySessionStore) Get(ctx context.Context, sessionID string) (*Session, error) {
+func (s *inMemorySessionStore) Get(ctx context.Context, sessionID string) (*models.Session, error) {
 	s.log.Debug("getting session", "session_id", sessionID)
 
 	s.mutex.Lock()
@@ -87,7 +83,7 @@ func (s *inMemorySessionStore) Delete(ctx context.Context, sessionID string) err
 	return nil
 }
 
-func (s *inMemorySessionStore) Renew(ctx context.Context, sessionID string) error {
+func (s *inMemorySessionStore) Renew(ctx context.Context, sessionID string) (*models.Session, error) {
 	s.log.Debug("renewing session", "session_id", sessionID)
 
 	s.mutex.Lock()
@@ -97,20 +93,20 @@ func (s *inMemorySessionStore) Renew(ctx context.Context, sessionID string) erro
 	select {
 	case <-ctx.Done():
 		s.log.Info("context cancelled during session renew", "error", ctx.Err())
-		return ctx.Err()
+		return nil, ctx.Err()
 	default:
 	}
 
 	sess, ok := s.sessions[sessionID]
 	if !ok || sess.ExpiresAt.Before(time.Now()) {
-		return &SessionExpiredError{ID: sessionID}
+		return nil, &SessionExpiredError{ID: sessionID}
 	}
 
 	sess.ExpiresAt = time.Now().Add(s.tokenDuration)
-	return nil
+	return sess, nil
 }
 
-func (s *inMemorySessionStore) DeleteUser(ctx context.Context, userID *uuid.UUID) error {
+func (s *inMemorySessionStore) DeleteUser(ctx context.Context, userID uuid.UUID) error {
 	s.log.Debug("deleting sessions for user", "user_id", userID)
 
 	s.mutex.Lock()
@@ -153,32 +149,4 @@ func (s *inMemorySessionStore) CleanupExpired(ctx context.Context) error {
 		}
 	}
 	return nil
-}
-
-// StartCleanupWorker starts a goroutine that periodically cleans up expired sessions.
-// The interval specifies how often the cleanup should run.
-func (s *inMemorySessionStore) startCleanupWorker(interval time.Duration) {
-	s.log.Debug("Starting session cleanup worker", "interval", interval)
-	ticker := time.NewTicker(interval)
-
-	go func() {
-		defer ticker.Stop() // Ensure the ticker is stopped when the goroutine exits
-		for {
-			select {
-			case <-ticker.C:
-				cleanupCtx, cancel := context.WithTimeout(context.Background(), interval/2) // Give it a max half the interval
-				err := s.CleanupExpired(cleanupCtx)
-				if err != nil {
-					if err != context.Canceled && err != context.DeadlineExceeded {
-						s.log.Error("failed to cleanup sessions", "err", err)
-					}
-				}
-				cancel() // Release resources associated with this context
-
-			case <-s.stopCh:
-				s.log.Info("Stopping session cleanup worker")
-				return // Exit the goroutine
-			}
-		}
-	}()
 }

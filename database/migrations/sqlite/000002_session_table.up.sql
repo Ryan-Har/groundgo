@@ -4,7 +4,7 @@ CREATE TABLE sessions (
     -- The cryptographically secure session token (32 bytes of entropy, hex-encoded to 64 chars).
     id TEXT PRIMARY KEY NOT NULL,
     -- Foreign key to the 'users' table.
-    user_id INTEGER NOT NULL,
+    user_id TEXT NOT NULL,
     -- Unix timestamp indicating when the session will expire.
     expires_at INTEGER NOT NULL,
     -- The client's IP address at the time of session creation. Useful for security auditing.

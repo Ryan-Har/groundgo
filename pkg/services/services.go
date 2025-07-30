@@ -47,12 +47,15 @@ func New(db *sql.DB, dbType DBType, logger *slog.Logger, sessionInMemory bool) *
 		logger: logger,
 		dbType: dbType,
 	}
-	if sessionInMemory {
-		svc.Session = sessionstore.NewInMemory(logger)
-	}
+
 	switch dbType {
 	case DBTypeSQLite:
 		svc.Auth = authstore.NewWithSqliteStore(svc.db, svc.logger)
+		if sessionInMemory {
+			svc.Session = sessionstore.NewInMemory(logger)
+		} else {
+			svc.Session = sessionstore.NewSqlLite(logger, db)
+		}
 	}
 	return svc
 }

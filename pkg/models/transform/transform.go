@@ -128,3 +128,39 @@ func ToGetUserByOAuthParams(args models.UserOAuthParams) sqliteDB.GetUserByOAuth
 		OauthID:       idPtr,
 	}
 }
+
+func ToSQLiteCreateSessionParams(args models.Session) sqliteDB.CreateSessionParams {
+	return sqliteDB.CreateSessionParams{
+		ID:        args.ID,
+		UserID:    args.UserID.String(),
+		ExpiresAt: args.ExpiresAt.Unix(),
+		IpAddress: args.IpAddress,
+		UserAgent: args.UserAgent,
+	}
+}
+
+func FromSQLiteSession(args sqliteDB.Session) (models.Session, error) {
+	sesh := models.Session{
+		ID:        args.ID,
+		ExpiresAt: time.Unix(args.ExpiresAt, 0),
+		IpAddress: args.IpAddress,
+		UserAgent: args.UserAgent,
+		CreatedAt: time.Unix(args.CreatedAt, 0),
+	}
+
+	usrID, err := ParseUUIDAllowEmpty(args.UserID)
+	if err != nil {
+		return models.Session{}, err
+	}
+
+	sesh.UserID = usrID
+	return sesh, nil
+}
+
+func ParseUUIDAllowEmpty(s string) (uuid.UUID, error) {
+	if s == "" {
+		return uuid.Nil, nil // treat empty string as nil UUID
+	}
+
+	return uuid.Parse(s) // validate and parse all others
+}

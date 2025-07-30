@@ -23,7 +23,7 @@ type RevokedToken struct {
 
 type Session struct {
 	ID        string  `json:"id"`
-	UserID    int64   `json:"userId"`
+	UserID    string  `json:"userId"`
 	ExpiresAt int64   `json:"expiresAt"`
 	IpAddress *string `json:"ipAddress"`
 	UserAgent *string `json:"userAgent"`

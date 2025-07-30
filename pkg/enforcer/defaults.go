@@ -78,7 +78,7 @@ func (e *Enforcer) SetDefaultLoginRoute() {
 			return
 		}
 
-		session, err := e.session.Create(r.Context(), &user.ID)
+		session, err := e.session.Create(r.Context(), user.ID)
 		if err != nil {
 			e.log.Error("creating session", "err", err)
 		}
@@ -153,7 +153,7 @@ func (e *Enforcer) SetDefaultSignupRoute() {
 			return
 		}
 
-		session, err := e.session.Create(r.Context(), &user.ID)
+		session, err := e.session.Create(r.Context(), user.ID)
 		if err != nil {
 			e.log.Error("creating session", "err", err)
 		}

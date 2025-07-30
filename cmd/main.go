@@ -31,7 +31,6 @@ func main() {
 		groundgo.WithSqliteDB(db),
 		groundgo.WithLogger(logger),
 		groundgo.WithRouter(mainMux),
-		groundgo.WithInMemorySessionStore(),
 	)
 
 	if err != nil {
