@@ -57,9 +57,9 @@ func New(db *sql.DB, dbType DBType, logger *slog.Logger, sessionInMemory bool) *
 		if sessionInMemory {
 			svc.Session = sessionstore.NewInMemory(logger)
 		} else {
-			svc.Session = sessionstore.NewSqlLite(logger, db)
+			svc.Session = sessionstore.NewSqlite(logger, db)
 		}
-		svc.Token = tokenstore.NewSqlLite(logger, "tempSecureSigningSecret", time.Minute*15, db)
+		svc.Token = tokenstore.NewSqlite(logger, "tempSecureSigningSecret", time.Minute*15, db)
 	}
 	return svc
 }

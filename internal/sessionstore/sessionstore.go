@@ -26,7 +26,7 @@ func NewInMemory(logger *slog.Logger) *inMemorySessionStore {
 	return s
 }
 
-func NewSqlLite(logger *slog.Logger, db *sql.DB) *sqliteSessionStore {
+func NewSqlite(logger *slog.Logger, db *sql.DB) *sqliteSessionStore {
 	s := &sqliteSessionStore{
 		baseSessionStore: NewBase(logger, 32, time.Minute*30),
 		db:               db,

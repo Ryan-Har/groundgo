@@ -18,7 +18,7 @@ type sqliteTokenStore struct {
 	queries sqliteDB.Queries
 }
 
-func NewSqlLite(logger *slog.Logger, signingSecret string, tokenDuration time.Duration, db *sql.DB) *sqliteTokenStore {
+func NewSqlite(logger *slog.Logger, signingSecret string, tokenDuration time.Duration, db *sql.DB) *sqliteTokenStore {
 	return &sqliteTokenStore{
 		baseTokenStore: NewBase(logger, signingSecret, tokenDuration),
 		db:             db,
