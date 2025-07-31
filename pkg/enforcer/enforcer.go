@@ -55,6 +55,9 @@ func NewEnforcer(logger *slog.Logger, router Router, auth authstore.Store, sess 
 // SetPolicy allows defining the minimum required role for a given resource path and HTTP method.
 // Use "*" as the method to apply the policy to all methods for that path.
 func (e *Enforcer) SetPolicy(resourcePath string, method string, requiredRole models.Role) {
+	if !strings.HasPrefix(resourcePath, "/") {
+		resourcePath = "/" + resourcePath
+	}
 	if _, ok := e.Policies[resourcePath]; !ok {
 		e.Policies[resourcePath] = make(map[string]models.Role)
 	}
