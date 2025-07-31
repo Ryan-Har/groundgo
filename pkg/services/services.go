@@ -4,10 +4,12 @@ import (
 	"database/sql"
 	"errors"
 	"log/slog"
+	"time"
 
 	"github.com/Ryan-Har/groundgo/database"
 	"github.com/Ryan-Har/groundgo/internal/authstore"
 	"github.com/Ryan-Har/groundgo/internal/sessionstore"
+	"github.com/Ryan-Har/groundgo/internal/tokenstore"
 )
 
 type Services struct {
@@ -15,6 +17,7 @@ type Services struct {
 	logger  *slog.Logger
 	Auth    authstore.Store
 	Session sessionstore.Store
+	Token   tokenstore.TokenStore
 	dbType  DBType
 }
 
@@ -56,6 +59,7 @@ func New(db *sql.DB, dbType DBType, logger *slog.Logger, sessionInMemory bool) *
 		} else {
 			svc.Session = sessionstore.NewSqlLite(logger, db)
 		}
+		svc.Token = tokenstore.NewSqlLite(logger, "tempSecureSigningSecret", time.Minute*15, db)
 	}
 	return svc
 }

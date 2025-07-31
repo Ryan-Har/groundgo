@@ -1,6 +1,7 @@
 package enforcer
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -34,6 +35,7 @@ func (e *Enforcer) LoadDefaultRoutes() {
 	e.SetDefaultLoginRoute()
 	e.SetDefaultSignupRoute()
 	e.SetDefaultAdminRoute()
+	e.SetDefaultAPI()
 }
 
 // SetDefaultLoginRoute configures the HTTP handlers for the user login process.
@@ -429,4 +431,72 @@ func adminCountDelta(beforeUpdateUser, afterUpdateUser *models.User) int {
 	default:
 		return 0
 	}
+}
+
+func (e *Enforcer) SetDefaultAPI() {
+	e.HandleFunc("GET /api/v1/token/verify", func(w http.ResponseWriter, r *http.Request) {
+		defer e.log.Debug("Processed", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
+		// middleware will have already denied the user by this point
+		// TODO: implement properly, returns 200 even without a bearer
+		tokenstr, ok := r.Context().Value(jwtContextKey).(string)
+		if !ok || tokenstr == "" {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+
+	e.HandleFunc("GET /api/v1/token/refresh", func(w http.ResponseWriter, r *http.Request) {
+		defer e.log.Debug("Processed", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
+
+		tokenstr, ok := r.Context().Value(jwtContextKey).(string)
+		if !ok || tokenstr == "" {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+
+		newToken, err := e.token.RefreshTokenStr(r.Context(), tokenstr)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		resp := map[string]string{"token": newToken}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	})
+
+	e.HandleFunc("POST /api/v1/login", func(w http.ResponseWriter, r *http.Request) {
+		defer e.log.Debug("Processed", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
+
+		var creds struct {
+			Email    string `json:"email"`
+			Password string `json:"password"`
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
+		}
+
+		user, err := e.auth.GetUserByEmail(r.Context(), creds.Email)
+		if err != nil || user.PasswordHash == nil || !user.IsActive {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if !passwd.Authenticate(creds.Password, *user.PasswordHash) {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		token, err := e.token.IssueToken(user)
+		if err != nil {
+			http.Error(w, "failed to generate token", http.StatusInternalServerError)
+			return
+		}
+
+		resp := map[string]string{"token": token}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	})
 }

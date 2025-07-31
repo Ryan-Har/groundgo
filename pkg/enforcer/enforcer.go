@@ -7,6 +7,7 @@ import (
 
 	"github.com/Ryan-Har/groundgo/internal/authstore"
 	"github.com/Ryan-Har/groundgo/internal/sessionstore"
+	"github.com/Ryan-Har/groundgo/internal/tokenstore"
 	"github.com/Ryan-Har/groundgo/pkg/models"
 )
 
@@ -20,6 +21,7 @@ type Enforcer struct {
 	router   Router                             // used for middlewares and creating routes
 	auth     authstore.Store
 	session  sessionstore.Store
+	token    tokenstore.TokenStore
 }
 
 // NewEnforcer initializes and returns a new Enforcer instance.
@@ -42,13 +44,14 @@ type Enforcer struct {
 // Example:
 //
 //	enforcer := NewEnforcer(logger, router, authStore, sessionStore)
-func NewEnforcer(logger *slog.Logger, router Router, auth authstore.Store, sess sessionstore.Store) *Enforcer {
+func NewEnforcer(logger *slog.Logger, router Router, auth authstore.Store, sess sessionstore.Store, token tokenstore.TokenStore) *Enforcer {
 	return &Enforcer{
 		log:      logger,
 		Policies: map[string]map[string]models.Role{},
 		router:   router,
 		auth:     auth,
 		session:  sess,
+		token:    token,
 	}
 }
 

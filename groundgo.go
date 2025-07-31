@@ -65,7 +65,7 @@ func New(opts ...Option) (*GroundGo, error) {
 	gg.logger.Debug("groundgo services loaded")
 
 	// load enforcer
-	gg.Enforcer = enforcer.NewEnforcer(gg.logger, gg.router, gg.Services.Auth, gg.Services.Session)
+	gg.Enforcer = enforcer.NewEnforcer(gg.logger, gg.router, gg.Services.Auth, gg.Services.Session, gg.Services.Token)
 	gg.logger.Info("groundgo enforcer loaded")
 
 	// check if database is pingable
