@@ -5,10 +5,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/Ryan-Har/groundgo/internal/authstore"
-	"github.com/Ryan-Har/groundgo/internal/sessionstore"
-	"github.com/Ryan-Har/groundgo/internal/tokenstore"
 	"github.com/Ryan-Har/groundgo/pkg/models"
+	"github.com/Ryan-Har/groundgo/pkg/store"
 )
 
 // Enforcer manages access control policies and wraps route handlers with
@@ -19,9 +17,9 @@ type Enforcer struct {
 	Policies map[string]map[string]models.Role  // e.g route: {Get: RoleUser, Post: RoleAdmin}
 	handlers map[string]map[string]http.Handler // path -> method -> handler internal mapping
 	router   Router                             // used for middlewares and creating routes
-	auth     authstore.Store
-	session  sessionstore.Store
-	token    tokenstore.TokenStore
+	auth     store.Authstore
+	session  store.Sessionstore
+	token    store.Tokenstore
 }
 
 // NewEnforcer initializes and returns a new Enforcer instance.
@@ -44,7 +42,7 @@ type Enforcer struct {
 // Example:
 //
 //	enforcer := NewEnforcer(logger, router, authStore, sessionStore)
-func NewEnforcer(logger *slog.Logger, router Router, auth authstore.Store, sess sessionstore.Store, token tokenstore.TokenStore) *Enforcer {
+func NewEnforcer(logger *slog.Logger, router Router, auth store.Authstore, sess store.Sessionstore, token store.Tokenstore) *Enforcer {
 	return &Enforcer{
 		log:      logger,
 		Policies: map[string]map[string]models.Role{},

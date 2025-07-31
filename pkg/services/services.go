@@ -10,14 +10,15 @@ import (
 	"github.com/Ryan-Har/groundgo/internal/authstore"
 	"github.com/Ryan-Har/groundgo/internal/sessionstore"
 	"github.com/Ryan-Har/groundgo/internal/tokenstore"
+	"github.com/Ryan-Har/groundgo/pkg/store"
 )
 
 type Services struct {
 	db      *sql.DB
 	logger  *slog.Logger
-	Auth    authstore.Store
-	Session sessionstore.Store
-	Token   tokenstore.TokenStore
+	Auth    store.Authstore
+	Session store.Sessionstore
+	Token   store.Tokenstore
 	dbType  DBType
 }
 

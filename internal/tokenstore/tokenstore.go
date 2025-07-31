@@ -96,19 +96,3 @@ func (t *baseTokenStore) refreshToken(ctx context.Context, checker tokenStateChe
 	return token.SignedString([]byte(t.jwtSecret))
 }
 
-type TokenStore interface {
-	// Generate a new JWT for a user
-	IssueToken(user *models.User) (string, error)
-
-	// ParseToken validates and parses a JWT string, returning the tokenPayload if valid. Does not check if it is revoked.
-	ParseToken(ctx context.Context, tokenStr string) (*TokenPayload, error)
-
-	// Revoke a token before expiry
-	RevokeToken(ctx context.Context, token *TokenPayload) error
-
-	// Check if a token payload has been revoked
-	IsRevoked(ctx context.Context, tokenPayload *TokenPayload) (bool, error)
-
-	// Refresh an expiring token
-	RefreshTokenStr(ctx context.Context, oldTokenStr string) (string, error)
-}

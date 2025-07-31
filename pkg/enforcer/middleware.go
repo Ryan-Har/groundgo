@@ -153,38 +153,6 @@ func (e *Enforcer) validateTokenAndGetUser(ctx context.Context, tokenString stri
 	return user, nil
 }
 
-// // getUserFromJWT handles JWT-based authentication
-// func (e *Enforcer) getUserFromJWT(r *http.Request) (*models.User, error) {
-// 	// Extract JWT from Authorization header
-// 	authHeader := r.Header.Get("Authorization")
-// 	if authHeader == "" {
-// 		return nil, errors.New("no authorization header")
-// 	}
-
-// 	// Check for Bearer token format
-// 	parts := strings.SplitN(authHeader, " ", 2)
-// 	if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-// 		return nil, errors.New("invalid authorization header format")
-// 	}
-
-// 	tokenString := parts[1]
-// 	if tokenString == "" {
-// 		return nil, errors.New("empty token")
-// 	}
-
-// 	payload, err := e.token.ParseToken(r.Context(), tokenString)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	user, err := e.auth.GetUserByID(r.Context(), payload.Sub)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	return user, nil
-// }
-
 // handleSessionError processes session-related errors
 // Since we're dealing with cookies, we assume this is a browser request and redirect
 func (e *Enforcer) handleSessionError(err error, cookie *http.Cookie, w http.ResponseWriter, r *http.Request) {
