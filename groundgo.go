@@ -5,19 +5,21 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/Ryan-Har/groundgo/pkg/builtins"
 	"github.com/Ryan-Har/groundgo/pkg/enforcer"
-	"github.com/Ryan-Har/groundgo/pkg/services"
+	"github.com/Ryan-Har/groundgo/pkg/store"
 )
 
 type GroundGo struct {
 	logger   *slog.Logger
 	config   *Config
-	Services *services.Services
+	Store    *store.Store
 	Enforcer *enforcer.Enforcer
+	Builtin  *builtins.Builtin
 
 	// Hold information to initialize services after configuration
 	db               *sql.DB
-	dbType           services.DBType
+	dbType           store.DBType
 	router           enforcer.Router
 	sessionsInMemory bool // detertmines if the session store is held in memory only
 }
@@ -35,7 +37,7 @@ func WithLogger(l *slog.Logger) Option {
 func WithSqliteDB(db *sql.DB) Option {
 	return func(g *GroundGo) {
 		g.db = db
-		g.dbType = services.DBTypeSQLite
+		g.dbType = store.DBTypeSQLite
 	}
 }
 
@@ -60,25 +62,28 @@ func New(opts ...Option) (*GroundGo, error) {
 
 	gg.logger.Info("starting groundgo")
 
-	// load services now that logging is set
-	gg.Services = services.New(gg.db, gg.dbType, gg.logger, gg.sessionsInMemory)
-	gg.logger.Debug("groundgo services loaded")
-
-	// load enforcer
-	gg.Enforcer = enforcer.NewEnforcer(gg.logger, gg.router, gg.Services.Auth, gg.Services.Session, gg.Services.Token)
-	gg.logger.Info("groundgo enforcer loaded")
-
 	// check if database is pingable
 	if err := gg.db.Ping(); err != nil {
 		return nil, fmt.Errorf("unable to ping database: %w", err)
 	}
-	gg.logger.Debug("successfully connected to database")
+	gg.logger.Info("successfully connected to database")
 
-	if err := gg.Services.RunMigrations(); err != nil {
-		return nil, fmt.Errorf("unable to run migrations: %w", err)
+	// load stores now that logging is set
+	stores, err := store.New(gg.db, gg.dbType, gg.logger, gg.sessionsInMemory)
+	if err != nil {
+		return nil, err
 	}
-	gg.logger.Debug("successfully run migrations")
+	gg.logger.Info("groundgo stores loaded")
+	gg.Store = stores
 
+	// load enforcer
+	gg.Enforcer = enforcer.NewEnforcer(gg.logger, gg.router, gg.Store.Auth, gg.Store.Session, gg.Store.Token)
+	gg.logger.Info("groundgo enforcer loaded")
+
+	gg.Builtin = builtins.New(gg.logger, gg.Enforcer, gg.Store.Auth, gg.Store.Session, gg.Store.Token)
+	gg.logger.Info("groundgo builtins loaded")
+
+	gg.logger.Info("groundgo enforcer loaded")
 	return gg, nil
 }
 
