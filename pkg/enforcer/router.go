@@ -71,7 +71,7 @@ func (e *Enforcer) Handle(route string, handler http.Handler) error {
 
 	// Check for duplicate route
 	if _, exists := e.handlers[path][method]; exists {
-		return logutil.LogAndWrapErr(e.log, "attempted to add duplicate path to endorcer",
+		return logutil.LogAndWrapErr(e.log, "attempted to add duplicate path to enforcer",
 			NewDuplicatePathAndMethodError(path, method))
 	}
 

@@ -37,11 +37,14 @@ func main() {
 		logger.Error("failed to start groundgo", "err", err)
 	}
 
-	gg.Enforcer.LoadDefaultPolicies()
+	gg.Builtin.LoadAllPolicies()
 	gg.Enforcer.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Hello from the main application root!"))
 	})
-	gg.Enforcer.LoadDefaultRoutes()
+	err = gg.Builtin.LoadAllRoutes()
+	if err != nil {
+		slog.Error(err.Error())
+	}
 	//gg.Enforcer.SetPolicy("/admin/users/{id}", "*", models.RoleSystemAdmin)
 	// gg.Enforcer.SetPolicy("/admin", "*", models.RoleAdmin)
 

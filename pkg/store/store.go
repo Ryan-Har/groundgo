@@ -2,12 +2,88 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"log/slog"
 	"net/http"
+	"time"
 
+	"github.com/Ryan-Har/groundgo/database"
+	"github.com/Ryan-Har/groundgo/internal/authstore"
+	"github.com/Ryan-Har/groundgo/internal/logutil"
+	"github.com/Ryan-Har/groundgo/internal/sessionstore"
 	"github.com/Ryan-Har/groundgo/internal/tokenstore"
 	"github.com/Ryan-Har/groundgo/pkg/models"
 	"github.com/google/uuid"
 )
+
+type Store struct {
+	db      *sql.DB
+	log     *slog.Logger
+	Auth    Authstore
+	Session Sessionstore
+	Token   Tokenstore
+	dbType  DBType
+}
+
+type DBType string
+
+const (
+	DBTypeSQLite   DBType = "sqlite"
+	DBTypePostgres DBType = "postgres"
+)
+
+// New initializes and returns a Store struct with the appropriate
+// subcomponents (e.g., Auth, Session, Token) based on the provided configuration.
+// It also runs the database migrations required for the stores.
+//
+// The dbType parameter determines the type of database backend used for storage,
+// and sessionInMemory controls whether session storage is in-memory or not.
+//
+// Params:
+//   - db: a live database connection
+//   - dbType: the type of database (e.g., SQLite, Postgres) used to determine
+//     how to initialize subcomponents like Auth
+//   - logger: a slog.Logger pointer instance used for logging
+//   - sessionInMemory: if true, an in-memory session store is initialized
+//
+// Example:
+//
+//	svc := New(db, DBTypeSQLite, logger, true)
+func New(db *sql.DB, dbType DBType, log *slog.Logger, sessionInMemory bool) (*Store, error) {
+	s := &Store{
+		db:     db,
+		log:    log,
+		dbType: dbType,
+	}
+
+	switch dbType {
+	case DBTypeSQLite:
+		s.Auth = authstore.NewWithSqliteStore(s.db, s.log)
+		if sessionInMemory {
+			s.Session = sessionstore.NewInMemory(log)
+		} else {
+			s.Session = sessionstore.NewSqlite(log, db)
+		}
+		s.Token = tokenstore.NewSqlite(log, "tempSecureSigningSecret", time.Minute*15, db)
+	}
+
+	if err := s.runMigrations(); err != nil {
+		return nil, logutil.LogAndWrapErr(s.log, "unable to run migrations", err)
+	}
+
+	return s, nil
+}
+
+func (s *Store) runMigrations() error {
+	defer logutil.NewTimingLogger(s.log, time.Now(), "ran database migrations", "dbType", s.dbType)()
+	switch s.dbType {
+	case DBTypeSQLite:
+		return database.RunSqliteMigrations(s.db)
+	default:
+		return errors.New("unknown database type")
+	}
+}
 
 type Sessionstore interface {
 	// CreateSession generates a new session, stores it, and returns the session ID.

@@ -13,8 +13,8 @@ import (
 type contextKey string
 
 const (
-	userContextKey contextKey = "user"
-	jwtContextKey  contextKey = "jwt"
+	UserContextKey contextKey = "user"
+	JWTContextKey  contextKey = "jwt"
 )
 
 // AuthenticationMiddleware is an HTTP middleware that extracts and validates
@@ -92,8 +92,8 @@ func (e *Enforcer) AuthenticationMiddleware(next http.Handler) http.Handler {
 
 		// Store the user and jwt string in the request context
 		ctx := context.WithValue(
-			context.WithValue(r.Context(), userContextKey, &authUser),
-			jwtContextKey, tokenString)
+			context.WithValue(r.Context(), UserContextKey, &authUser),
+			JWTContextKey, tokenString)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
@@ -166,28 +166,6 @@ func (e *Enforcer) handleSessionError(err error, cookie *http.Cookie, w http.Res
 	}
 }
 
-// isAPIRequest determines if this is an API request vs browser request
-// This helps decide whether to redirect or return HTTP error codes
-func (e *Enforcer) isAPIRequest(r *http.Request) bool {
-	// Check for API indicators
-	if strings.HasPrefix(r.URL.Path, "/api/") {
-		return true
-	}
-
-	// Check Accept header - APIs typically request JSON
-	accept := r.Header.Get("Accept")
-	if strings.Contains(accept, "application/json") && !strings.Contains(accept, "text/html") {
-		return true
-	}
-
-	// Check for Authorization header (JWT users are likely API consumers)
-	if r.Header.Get("Authorization") != "" {
-		return true
-	}
-
-	return false
-}
-
 // AuthorizationMiddleware returns an HTTP middleware that ensures the user has
 // the required role for accessing a specific path.
 //
@@ -213,7 +191,7 @@ func (e *Enforcer) isAPIRequest(r *http.Request) bool {
 func (e *Enforcer) AuthorizationMiddleware(path string, required models.Role) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			user, ok := r.Context().Value(userContextKey).(*models.User)
+			user, ok := r.Context().Value(UserContextKey).(*models.User)
 			if !ok {
 				e.log.Error("AuthorizationMiddleware expected User in http context and did not receive", "path", path)
 				http.Error(w, "Forbidden", http.StatusInternalServerError)
