@@ -1,12 +1,14 @@
 package enforcer
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"strings"
 
+	"github.com/Ryan-Har/groundgo/internal/tokenstore"
 	"github.com/Ryan-Har/groundgo/pkg/models"
-	"github.com/Ryan-Har/groundgo/pkg/store"
+	"github.com/google/uuid"
 )
 
 // Enforcer manages access control policies and wraps route handlers with
@@ -17,9 +19,42 @@ type Enforcer struct {
 	Policies map[string]map[string]models.Role  // e.g route: {Get: RoleUser, Post: RoleAdmin}
 	handlers map[string]map[string]http.Handler // path -> method -> handler internal mapping
 	router   Router                             // used for middlewares and creating routes
-	auth     store.Authstore
-	session  store.Sessionstore
-	token    store.Tokenstore
+	auth     AuthStore
+	session  SessionStore
+	token    TokenStore
+}
+
+// AuthStore defines the subset of authentication methods
+// that the Enforcer requires to fetch user information during
+// token/session validation and access control.
+type AuthStore interface {
+	// GetUserByID retrieves a user by their unique identifier.
+	// Returns (nil, nil) if the user does not exist.
+	GetUserByID(ctx context.Context, id uuid.UUID) (*models.User, error)
+}
+
+// SessionStore defines the minimal session-related functionality
+// that Enforcer uses for session validation and management in requests.
+type SessionStore interface {
+	// Get retrieves the session by its ID.
+	// Should return an error or (nil, nil) if the session is expired or not found.
+	Get(ctx context.Context, sessionID string) (*models.Session, error)
+
+	// ExpireCookie clears a session cookie on the client by writing
+	// an expired cookie to the response. Used during logout and invalidation flows.
+	ExpireCookie(c *http.Cookie, w http.ResponseWriter)
+}
+
+// TokenStore defines the token parsing and revocation-checking
+// capabilities required by Enforcer for JWT-based authentication.
+type TokenStore interface {
+	// ParseToken decodes and validates the structure and signature
+	// of the provided JWT token string.
+	// This does not check revocation status.
+	ParseToken(ctx context.Context, tokenStr string) (*tokenstore.TokenPayload, error)
+
+	// IsRevoked returns true if the given token has been explicitly revoked.
+	IsRevoked(ctx context.Context, tokenPayload *tokenstore.TokenPayload) (bool, error)
 }
 
 // NewEnforcer initializes and returns a new Enforcer instance.
@@ -42,7 +77,7 @@ type Enforcer struct {
 // Example:
 //
 //	enforcer := NewEnforcer(logger, router, authStore, sessionStore)
-func NewEnforcer(logger *slog.Logger, router Router, auth store.Authstore, sess store.Sessionstore, token store.Tokenstore) *Enforcer {
+func NewEnforcer(logger *slog.Logger, router Router, auth AuthStore, sess SessionStore, token TokenStore) *Enforcer {
 	return &Enforcer{
 		log:      logger,
 		Policies: map[string]map[string]models.Role{},

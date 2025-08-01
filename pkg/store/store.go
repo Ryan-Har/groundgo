@@ -85,103 +85,99 @@ func (s *Store) runMigrations() error {
 	}
 }
 
+// Sessionstore manages session lifecycle and storage.
+// It supports stateless and stateful session management depending on the backend.
 type Sessionstore interface {
-	// CreateSession generates a new session, stores it, and returns the session ID.
+
+	// Create generates and stores a new session, returning the new session model.
 	Create(ctx context.Context, userID uuid.UUID) (*models.Session, error)
 
-	// GetSession retrieves a session by its ID.
-	// It should also handle session expiration.
+	// Get retrieves a session by its ID.
+	// Expired sessions should return an error or nil.
 	Get(ctx context.Context, sessionID string) (*models.Session, error)
 
-	// DeleteSession removes a session by its ID.
+	// Delete removes a session by ID.
 	Delete(ctx context.Context, sessionID string) error
 
-	// RenewSession updates the expiry of an existing session without changing its data.
-	// This is commonly used to extend the session lifetime on activity.
+	// Renew extends the expiration time of an existing session.
 	Renew(ctx context.Context, sessionID string) (*models.Session, error)
 
-	// DeleteUserSessions deletes all sessions associated with a specific user ID.
-	// Useful when a user changes password, logs out from all devices, or is deleted.
+	// DeleteUserSessions removes all sessions for the given user.
+	// Useful for logout-all or security workflows.
 	DeleteUser(ctx context.Context, userID uuid.UUID) error
 
-	// CleanupExpiredSessions removes all expired sessions from the store.
-	// This is crucial for in-memory stores to prevent memory leaks and should
-	// ideally be run periodically (e.g., as a goroutine).
+	// CleanupExpiredSessions deletes expired sessions.
+	// For in-memory stores, this is critical to avoid memory leaks.
 	CleanupExpired(ctx context.Context) error
 
-	//base methods, for various functions required by the store
+	// ExpireCookie invalidates a session cookie in the client response.
+	// Should be used during logout or session invalidation.
 	ExpireCookie(c *http.Cookie, w http.ResponseWriter)
 }
 
+// Tokenstore defines the behavior for issuing, validating, revoking, and refreshing JWTs or token-based auth.
 type Tokenstore interface {
-	// Generate a new JWT for a user
+
+	// IssueToken generates a new token for the specified user.
 	IssueToken(user *models.User) (string, error)
 
-	// ParseToken validates and parses a JWT string, returning the tokenPayload if valid. Does not check if it is revoked.
+	// ParseToken decodes and validates a token string.
+	// This does not check revocation — use IsRevoked() for that.
 	ParseToken(ctx context.Context, tokenStr string) (*tokenstore.TokenPayload, error)
 
-	// Revoke a token before expiry
+	// RevokeToken permanently invalidates a given token payload.
 	RevokeToken(ctx context.Context, token *tokenstore.TokenPayload) error
 
-	// Check if a token payload has been revoked
+	// IsRevoked checks if the given token has been explicitly revoked.
 	IsRevoked(ctx context.Context, tokenPayload *tokenstore.TokenPayload) (bool, error)
 
-	// Refresh an expiring token
+	// RefreshTokenStr issues a new token from an existing valid one.
+	// Returns a new signed token string.
 	RefreshTokenStr(ctx context.Context, oldTokenStr string) (string, error)
 }
 
-// Authstore defines a unified interface for interacting with the user authentication datastore.
-// It abstracts storage-specific implementations (e.g., SQLite, Postgres) behind consistent,
-// well-documented operations used by services.
-//
-// All methods must return meaningful error types as defined in the models package,
-// including ValidationError, TransformationError, and DatabaseError.
-//
-// The returned models must be portable and backend-agnostic (i.e., not tied to any backend schema).
+// Authstore provides an abstract interface to manage user authentication and account records.
+// It is storage-agnostic and supports common operations like creation, lookup, and account updates.
 type Authstore interface {
 
-	// CheckEmailExists returns true if a user with the specified email exists in the datastore.
+	// CheckEmailExists returns true if a user with the given email exists in the store.
 	CheckEmailExists(ctx context.Context, email string) (bool, error)
 
-	// CreateUser inserts a new user into the datastore using the provided parameters.
-	// Returns a pointer to the created user, or a DatabaseError if insertion fails.
+	// CreateUser creates a new user record using the provided parameters.
+	// Returns the created user or a detailed error on failure.
 	CreateUser(ctx context.Context, args models.CreateUserParams) (*models.User, error)
 
-	// GetUserByEmail retrieves a user by email.
-	// If no user is found, returns (nil, nil). Otherwise returns a pointer to the user.
+	// GetUserByEmail retrieves a user by their email address.
+	// Returns (nil, nil) if not found.
 	GetUserByEmail(ctx context.Context, email string) (*models.User, error)
 
-	// GetUserByID retrieves a user by their UUID.
-	// Returns a DatabaseError if the query fails.
+	// GetUserByID fetches a user by their UUID.
 	GetUserByID(ctx context.Context, id uuid.UUID) (*models.User, error)
 
-	// GetUserByOAuth looks up a user by their OAuth provider and ID.
-	// Empty parameters may be treated as nil depending on the backend.
+	// GetUserByOAuth finds a user using OAuth provider and ID details.
 	GetUserByOAuth(ctx context.Context, args models.UserOAuthParams) (*models.User, error)
 
-	// ListAllUsers returns all users in the datastore.
-	// If some users fail to transform from raw DB format to model format,
-	// those users are skipped and transformation errors are returned via errors.Join.
+	// ListAllUsers returns all users in the system.
+	// Skips users that cannot be parsed and collects transformation errors.
 	ListAllUsers(ctx context.Context) ([]*models.User, error)
 
-	// SoftDeleteUser marks a user as inactive (IsActive = false) without deleting data.
+	// SoftDeleteUser marks a user as inactive (without deleting their data).
 	SoftDeleteUser(ctx context.Context, id uuid.UUID) error
 
-	// RestoreUser reactivates a soft-deleted user (IsActive = true).
+	// RestoreUser reactivates a previously soft-deleted user.
 	RestoreUser(ctx context.Context, id uuid.UUID) error
 
-	// HardDeleteUser permanently removes a user's record from the datastore.
+	// HardDeleteUser permanently removes a user record.
 	HardDeleteUser(ctx context.Context, id uuid.UUID) error
 
-	// UpdateUserRole sets the user’s role to the specified value.
-	// This method must also synchronize the root claim ("/") to match the new role.
+	// UpdateUserRole changes a user’s role.
+	// Also updates the root claim ("/") to reflect the new role.
 	UpdateUserRole(ctx context.Context, id uuid.UUID, role models.Role) error
 
-	// UpdateUserClaims replaces the user’s claims with the provided claims map.
-	// This method must also ensure that the root claim ("/") is updated to match the user's existing role if not specified.
-	// It updates the role too if the root claim provided has a different role to what exists currently.
+	// UpdateUserClaims replaces a user's claims.
+	// Ensures consistency between claims and role, especially the root ("/") claim.
 	UpdateUserClaims(ctx context.Context, id uuid.UUID, claims models.Claims) error
 
-	// UpdateUserPassword hashes and stores the new password for the specified user.
+	// UpdateUserPassword securely hashes and stores a new password for the user.
 	UpdateUserPassword(ctx context.Context, id uuid.UUID, password string) error
 }
