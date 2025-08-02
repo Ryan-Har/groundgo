@@ -3,11 +3,13 @@ package enforcer
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/Ryan-Har/groundgo/internal/sessionstore"
 	"github.com/Ryan-Har/groundgo/pkg/models"
+	"github.com/google/uuid"
 )
 
 type contextKey string
@@ -131,21 +133,17 @@ func (e *Enforcer) extractBearerToken(r *http.Request) (string, error) {
 }
 
 func (e *Enforcer) validateTokenAndGetUser(ctx context.Context, tokenString string) (*models.User, error) {
-	payload, err := e.token.ParseToken(ctx, tokenString)
+	payload, err := e.token.ParseAccessTokenAndValidate(ctx, tokenString)
 	if err != nil {
 		return nil, err
 	}
 
-	revoked, err := e.token.IsRevoked(ctx, payload)
+	subID, err := uuid.Parse(payload.Subject)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to parse payload subject: %w", err)
 	}
 
-	if revoked {
-		return nil, errors.New("token revoked")
-	}
-
-	user, err := e.auth.GetUserByID(ctx, payload.Sub)
+	user, err := e.auth.GetUserByID(ctx, subID)
 	if err != nil {
 		return nil, err
 	}

@@ -14,6 +14,14 @@ type AuthAuditLog struct {
 	CreatedAt int64   `json:"createdAt"`
 }
 
+type RefreshToken struct {
+	ID        string `json:"id"`
+	UserID    string `json:"userId"`
+	TokenHash string `json:"tokenHash"`
+	ExpiresAt int64  `json:"expiresAt"`
+	CreatedAt int64  `json:"createdAt"`
+}
+
 type RevokedToken struct {
 	ID                string `json:"id"`
 	UserID            string `json:"userId"`

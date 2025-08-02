@@ -56,6 +56,7 @@ func (h *Handler) handleLoginPost() http.HandlerFunc {
 			h.log.Error("creating session", "err", err)
 		}
 
+		// TODO: Make secure before release
 		http.SetCookie(w, &http.Cookie{
 			Name:     "session_token",
 			Value:    session.ID,

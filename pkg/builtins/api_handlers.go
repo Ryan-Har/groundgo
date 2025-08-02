@@ -27,19 +27,35 @@ func (h *Handler) handleAPITokenRefresh() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 
-		tokenstr, ok := r.Context().Value(enforcer.JWTContextKey).(string)
-		if !ok || tokenstr == "" {
-			w.WriteHeader(http.StatusForbidden)
-			return
-		}
-
-		newToken, err := h.token.RefreshTokenStr(r.Context(), tokenstr)
+		refreshTokenCookie, err := r.Cookie("refresh_token")
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			if err == http.ErrNoCookie {
+				http.Error(w, "refresh token not found", http.StatusUnauthorized)
+				return
+			}
+			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
 
-		resp := map[string]string{"token": newToken}
+		refreshTokenStr := refreshTokenCookie.Value
+
+		tokenPair, err := h.token.RotateRefreshToken(r.Context(), refreshTokenStr)
+		if err != nil {
+			// TODO: Handle errors from the rotation logic (e.g., invalid token)
+			http.Error(w, "failed to refresh token", http.StatusUnauthorized)
+			return
+		}
+
+		http.SetCookie(w, &http.Cookie{
+			Name:     "refresh_token",
+			Value:    tokenPair.RefreshToken,
+			HttpOnly: true,
+			Secure:   true, // In production
+			SameSite: http.SameSiteStrictMode,
+			Path:     "/api/v1/token/refresh",
+		})
+
+		resp := map[string]string{"token": tokenPair.AccessToken}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(resp)
 	}
@@ -70,13 +86,25 @@ func (h *Handler) handleAPILoginPost() http.HandlerFunc {
 			return
 		}
 
-		token, err := h.token.IssueToken(user)
+		tokenPair, err := h.token.IssueTokenPair(r.Context(), user)
 		if err != nil {
 			http.Error(w, "failed to generate token", http.StatusInternalServerError)
 			return
 		}
 
-		resp := map[string]string{"token": token}
+		// It's best practice to send the refresh token in a secure, HttpOnly cookie
+		// to protect against XSS, but for simplicity, a JSON response also works.
+		// TODO: Make secure before release
+		http.SetCookie(w, &http.Cookie{
+			Name:     "refresh_token",
+			Value:    tokenPair.RefreshToken,
+			HttpOnly: true,
+			Secure:   false, // Set to true in production
+			//SameSite: http.SameSiteStrictMode,
+			Path: "/api/v1/token/refresh", // Only send it to the refresh endpoint
+		})
+
+		resp := map[string]string{"token": tokenPair.AccessToken}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(resp)
 	}

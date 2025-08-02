@@ -115,25 +115,29 @@ type Sessionstore interface {
 	ExpireCookie(c *http.Cookie, w http.ResponseWriter)
 }
 
-// Tokenstore defines the behavior for issuing, validating, revoking, and refreshing JWTs or token-based auth.
+// Tokenstore defines the behavior for issuing, validating, and refreshing tokens.
 type Tokenstore interface {
+	// IssueTokenPair generates a new access and refresh token pair for the user.
+	IssueTokenPair(ctx context.Context, user *models.User) (*tokenstore.TokenPair, error)
 
-	// IssueToken generates a new token for the specified user.
-	IssueToken(user *models.User) (string, error)
+	// RotateRefreshToken validates an old refresh token and issues a new token pair.
+	// It handles the entire rotation logic: validate, delete old, create new.
+	RotateRefreshToken(ctx context.Context, refreshTokenStr string) (*tokenstore.TokenPair, error)
 
-	// ParseToken decodes and validates a token string.
-	// This does not check revocation — use IsRevoked() for that.
-	ParseToken(ctx context.Context, tokenStr string) (*tokenstore.TokenPayload, error)
+	// ParseAccessToken validates and parses a JWT string, returning the claims if valid.
+	// It does not check revocation status.
+	ParseAccessToken(ctx context.Context, tokenStr string) (*tokenstore.AccessToken, error)
 
-	// RevokeToken permanently invalidates a given token payload.
-	RevokeToken(ctx context.Context, token *tokenstore.TokenPayload) error
+	// RevokeAccessToken permanently invalidates a given access token payload.
+	// This adds the token's JTI to your `revoked_tokens` table.
+	RevokeAccessToken(ctx context.Context, token *tokenstore.AccessToken) error
 
-	// IsRevoked checks if the given token has been explicitly revoked.
-	IsRevoked(ctx context.Context, tokenPayload *tokenstore.TokenPayload) (bool, error)
+	// IsAccessTokenRevoked checks if the given access token has been explicitly revoked.
+	IsAccessTokenRevoked(ctx context.Context, tokenPayload *tokenstore.AccessToken) (bool, error)
 
-	// RefreshTokenStr issues a new token from an existing valid one.
-	// Returns a new signed token string.
-	RefreshTokenStr(ctx context.Context, oldTokenStr string) (string, error)
+	// ParseAccessTokenAndValidate is a convenience method that both parses access token
+	// And Checks if the token is revoked, providing an error if it is not a valid token.
+	ParseAccessTokenAndValidate(ctx context.Context, tokenStr string) (*tokenstore.AccessToken, error)
 }
 
 // Authstore provides an abstract interface to manage user authentication and account records.

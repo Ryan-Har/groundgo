@@ -48,13 +48,9 @@ type SessionStore interface {
 // TokenStore defines the token parsing and revocation-checking
 // capabilities required by Enforcer for JWT-based authentication.
 type TokenStore interface {
-	// ParseToken decodes and validates the structure and signature
-	// of the provided JWT token string.
-	// This does not check revocation status.
-	ParseToken(ctx context.Context, tokenStr string) (*tokenstore.TokenPayload, error)
-
-	// IsRevoked returns true if the given token has been explicitly revoked.
-	IsRevoked(ctx context.Context, tokenPayload *tokenstore.TokenPayload) (bool, error)
+	// ParseAccessTokenAndValidate is a helper that both Parses Access Token
+	// And Checks if the token is revoked, providing an error if it is not a valid token
+	ParseAccessTokenAndValidate(ctx context.Context, tokenStr string) (*tokenstore.AccessToken, error)
 }
 
 // NewEnforcer initializes and returns a new Enforcer instance.

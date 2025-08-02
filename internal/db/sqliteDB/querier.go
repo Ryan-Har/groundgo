@@ -14,6 +14,16 @@ type Querier interface {
 	CheckEmailExists(ctx context.Context, email string) (int64, error)
 	// CreateAuditLog inserts a new security event into the audit trail.
 	CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) (AuthAuditLog, error)
+	// --
+	// ## Refresh Token Queries
+	//
+	// This file defines the SQLC queries for managing user refresh tokens.
+	// A refresh token is a long-lived credential used to obtain a new access token.
+	// For security, we only store a SHA-256 hash of the token in the database.
+	// --
+	// Inserts a new refresh token record into the database. It returns the newly
+	// created record.
+	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
 	// CreateSession creates a new session record for a user.
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
 	// Inserts a new user into the database.
@@ -25,6 +35,9 @@ type Querier interface {
 	// DeleteExpiredSessions purges all session records that have passed their expiration time.
 	// This should be run periodically by a background job.
 	DeleteExpiredSessions(ctx context.Context) error
+	// Deletes a refresh token by its unique primary key (id). This is the most
+	// efficient way to delete a token after it has been successfully used for rotation.
+	DeleteRefreshTokenByID(ctx context.Context, id string) error
 	// DeleteSession removes a specific session, effectively logging the user out.
 	DeleteSession(ctx context.Context, id string) error
 	// DeleteSessionsByUserID removes all active sessions for a given user.
@@ -32,6 +45,13 @@ type Querier interface {
 	DeleteSessionsByUserID(ctx context.Context, userID string) error
 	// Deletes a user from the database by their ID.
 	DeleteUser(ctx context.Context, id string) error
+	// Deletes all refresh tokens associated with a specific user ID. This is a crucial
+	// security measure to invalidate all sessions for a user if a compromised token
+	// is detected or if they request a "log out from all devices" action.
+	DeleteUserRefreshTokens(ctx context.Context, userID string) error
+	// Retrieves a single refresh token by its SHA-256 hash. This is the primary
+	// method for looking up a token when a user tries to refresh their session.
+	GetRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error)
 	// GetSession retrieves a single, active session by its ID.
 	// It will not return a session if it has expired.
 	GetSession(ctx context.Context, id string) (Session, error)
