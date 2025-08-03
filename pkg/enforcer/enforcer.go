@@ -36,6 +36,9 @@ type AuthStore interface {
 // SessionStore defines the minimal session-related functionality
 // that Enforcer uses for session validation and management in requests.
 type SessionStore interface {
+	// Create generates and stores a new session, returning the new session model.
+	Create(ctx context.Context, userID uuid.UUID) (*models.Session, error)
+
 	// Get retrieves the session by its ID.
 	// Should return an error or (nil, nil) if the session is expired or not found.
 	Get(ctx context.Context, sessionID string) (*models.Session, error)

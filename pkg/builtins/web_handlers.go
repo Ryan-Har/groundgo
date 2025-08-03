@@ -63,6 +63,7 @@ func (h *Handler) handleLoginPost() http.HandlerFunc {
 			Expires:  session.ExpiresAt,
 			HttpOnly: true,
 			Secure:   false,
+			Path:     "/",
 		})
 
 		w.Header().Set("HX-Redirect", "/")
@@ -135,6 +136,7 @@ func (h *Handler) handleSignupPost() http.HandlerFunc {
 			Expires:  session.ExpiresAt,
 			HttpOnly: true,
 			Secure:   false,
+			Path:     "/",
 		})
 
 		w.Header().Set("HX-Redirect", "/")

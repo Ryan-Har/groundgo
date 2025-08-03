@@ -42,67 +42,99 @@ const (
 //   - A *models.User is stored under the key `userContextKey` for downstream handlers.
 func (e *Enforcer) AuthenticationMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var isAuthenticated bool
-		var authUser models.User
+		var authUser *models.User
 		var tokenString string
+		var isAuthenticated bool
 
-		// First, try session-based authentication
-		session, cookie, err := e.getSessionFromCookie(r)
+		// check for JWT bearer token first
+		if user, token, ok := e.tryJWTAuth(r); ok {
+			authUser = user
+			tokenString = token
+			isAuthenticated = true
+		}
 
-		// Handle session authentication
-		if session != nil && err == nil {
-			user, err := e.getUserFromSession(r.Context(), session, cookie, w, r)
-			if err != nil {
-				return // getUserFromSession handles redirects/responses
-			}
-			if user != nil {
-				authUser = *user
+		// try session-based authentication next if user is not using JWT
+		// returned user could be guest
+		if !isAuthenticated {
+			user, ok := e.trySessionAuth(r, w)
+			if ok {
+				authUser = user
 				isAuthenticated = true
 			}
-		} else if cookie != nil && err != nil {
-			// Cookie exists but session is invalid
-			e.handleSessionError(err, cookie, w, r)
-			return
 		}
 
-		// If session auth failed, try JWT authentication
+		// fallback: if neither authentication method worked, assign guest role
 		if !isAuthenticated {
-			tokenStr, err := e.extractBearerToken(r)
-			tokenString = tokenStr
-			if err == nil { //token extracted
-				user, err := e.validateTokenAndGetUser(r.Context(), tokenStr)
-				if err == nil {
-					authUser = *user
-					isAuthenticated = true
-				} else {
-					e.log.Debug("JWT token invalid or user not found", "error", err.Error(), "url", r.URL.Path)
-				}
+			user, err := e.createGuestSession(r, w)
+			if err != nil {
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				return
 			}
-
+			authUser = user
 		}
 
-		// If neither authentication method worked, assign guest role
-		if !isAuthenticated {
-			e.log.Debug("unable to authenticate user, assigning as guest",
-				"remote_address", r.RemoteAddr,
-				"url", r.URL.Path,
-				"user_agent", r.UserAgent())
-			authUser.Claims = map[string]models.Role{
-				"/": models.RoleGuest,
-			}
-		}
-
-		// Store the user and jwt string in the request context
+		// Store the user and jwt string (if available) in the request context
 		ctx := context.WithValue(
-			context.WithValue(r.Context(), UserContextKey, &authUser),
+			context.WithValue(r.Context(), UserContextKey, authUser),
 			JWTContextKey, tokenString)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
+// AuthorizationMiddleware returns an HTTP middleware that ensures the user has
+// the required role for accessing a specific path.
+//
+// It expects that AuthenticationMiddleware has already been applied and that a
+// *models.User is present in the request context under the `userContextKey`.
+// If the user context is missing, it logs an error and returns a 500 Internal Server Error.
+// If the user lacks sufficient permissions, it returns a 403 Forbidden response.
+//
+// Parameters:
+//   - path: the route path against which the user's role is validated.
+//   - required: the minimum role required to access the path.
+//
+// Logging:
+//   - If the user context is missing, logs an info-level message with verbosity 0.
+//
+// Example usage:
+//
+//	router.Handle("/admin",
+//	  enforcer.AuthenticationMiddleware(
+//	    enforcer.AuthorizationMiddleware("/admin", models.RoleAdmin)(adminHandler),
+//	  ),
+//	)
+func (e *Enforcer) AuthorizationMiddleware(path string, required models.Role) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			user, ok := r.Context().Value(UserContextKey).(*models.User)
+			if !ok {
+				e.log.Error("AuthorizationMiddleware expected User in http context and did not receive", "path", path)
+				http.Error(w, "Forbidden", http.StatusInternalServerError)
+				return
+			}
+
+			if !user.Claims.HasAtLeast(path, required) {
+				http.Error(w, "Forbidden", http.StatusForbidden)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // getUserFromSession handles session-based authentication
+// It returns the user model if it exists or a guest user model if uuid is nil.
 func (e *Enforcer) getUserFromSession(ctx context.Context, session *models.Session, cookie *http.Cookie, w http.ResponseWriter, r *http.Request) (*models.User, error) {
+	if session.UserID == uuid.Nil {
+		guestUser := &models.User{
+			ID:     uuid.Nil,
+			Claims: map[string]models.Role{"/": models.RoleGuest},
+		}
+		return guestUser, nil
+	}
+
 	user, err := e.auth.GetUserByID(ctx, session.UserID)
 	if err != nil || user == nil || !user.IsActive {
 		e.log.Info("session request from expired/unknown/inactive user", "id", session.UserID)
@@ -164,48 +196,6 @@ func (e *Enforcer) handleSessionError(err error, cookie *http.Cookie, w http.Res
 	}
 }
 
-// AuthorizationMiddleware returns an HTTP middleware that ensures the user has
-// the required role for accessing a specific path.
-//
-// It expects that AuthenticationMiddleware has already been applied and that a
-// *models.User is present in the request context under the `userContextKey`.
-// If the user context is missing, it logs an error and returns a 500 Internal Server Error.
-// If the user lacks sufficient permissions, it returns a 403 Forbidden response.
-//
-// Parameters:
-//   - path: the route path against which the user's role is validated.
-//   - required: the minimum role required to access the path.
-//
-// Logging:
-//   - If the user context is missing, logs an info-level message with verbosity 0.
-//
-// Example usage:
-//
-//	router.Handle("/admin",
-//	  enforcer.AuthenticationMiddleware(
-//	    enforcer.AuthorizationMiddleware("/admin", models.RoleAdmin)(adminHandler),
-//	  ),
-//	)
-func (e *Enforcer) AuthorizationMiddleware(path string, required models.Role) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			user, ok := r.Context().Value(UserContextKey).(*models.User)
-			if !ok {
-				e.log.Error("AuthorizationMiddleware expected User in http context and did not receive", "path", path)
-				http.Error(w, "Forbidden", http.StatusInternalServerError)
-				return
-			}
-
-			if !user.Claims.HasAtLeast(path, required) {
-				http.Error(w, "Forbidden", http.StatusForbidden)
-				return
-			}
-
-			next.ServeHTTP(w, r)
-		})
-	}
-}
-
 // WrapHandler applies authentication and, if a policy exists, authorization middleware
 // to the given handler. It returns the fully wrapped http.Handler.
 //
@@ -231,4 +221,75 @@ func (e *Enforcer) getSessionFromCookie(r *http.Request) (*models.Session, *http
 	}
 	session, err := e.session.Get(r.Context(), cookie.Value)
 	return session, cookie, err
+}
+
+// tryJWTAuth attempts to extract and validate a JWT Bearer token from the request.
+// If successful, it returns the authenticated user, the token string, and true.
+// On failure, it logs the error and returns nil, "", false.
+func (e *Enforcer) tryJWTAuth(r *http.Request) (*models.User, string, bool) {
+	tokenStr, err := e.extractBearerToken(r)
+	if err != nil {
+		return nil, "", false
+	}
+
+	user, err := e.validateTokenAndGetUser(r.Context(), tokenStr)
+	if err != nil {
+		e.log.Debug("JWT token invalid or user not found", "error", err.Error(), "url", r.URL.Path)
+		return nil, "", false
+	}
+
+	return user, tokenStr, true
+}
+
+// trySessionAuth attempts to retrieve and validate a session from the session cookie.
+// If the session is valid (including guest sessions), it returns the user and true.
+// If the session is expired or invalid, it handles the response (e.g., clearing cookie or redirecting).
+// On failure, it returns nil and false.
+func (e *Enforcer) trySessionAuth(r *http.Request, w http.ResponseWriter) (*models.User, bool) {
+	session, cookie, err := e.getSessionFromCookie(r)
+	if session != nil && err == nil {
+		user, err := e.getUserFromSession(r.Context(), session, cookie, w, r)
+		if err == nil && user != nil {
+			return user, true
+		}
+		return nil, false // error already handled
+	}
+
+	if cookie != nil && err != nil {
+		e.handleSessionError(err, cookie, w, r)
+	}
+
+	return nil, false
+}
+
+// createGuestSession creates a new session for an unauthenticated (guest) user.
+// It sets a session cookie in the response, and returns a User with RoleGuest.
+// If session creation or user resolution fails, an error is returned.
+func (e *Enforcer) createGuestSession(r *http.Request, w http.ResponseWriter) (*models.User, error) {
+	e.log.Debug("unauthenticated request, creating guest session",
+		"remote_address", r.RemoteAddr,
+		"url", r.URL.Path,
+		"user_agent", r.UserAgent())
+
+	guestSession, err := e.session.Create(r.Context(), uuid.Nil)
+	if err != nil {
+		e.log.Error("unable to create guest session", "err", err)
+		return nil, err
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_token",
+		Value:    guestSession.ID,
+		Expires:  guestSession.ExpiresAt,
+		HttpOnly: true,
+		Secure:   false, // Set to true in production
+		Path:     "/",
+	})
+
+	user, err := e.getUserFromSession(r.Context(), guestSession, nil, w, r)
+	if err != nil {
+		return nil, err
+	}
+
+	return user, nil
 }
