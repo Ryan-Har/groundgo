@@ -45,6 +45,7 @@ type AccessToken struct {
 
 // ErrInvalidToken is a sentinel error for invalid or expired tokens.
 var ErrInvalidToken = errors.New("invalid or expired token")
+var ErrTokenReuseDetected = errors.New("token reuse detected")
 
 // generateRefreshToken creates a secure, random, URL-safe string.
 func generateRefreshToken() (string, error) {

@@ -96,7 +96,7 @@ func (t *sqliteTokenStore) RotateRefreshToken(ctx context.Context, refreshTokenS
 	// CRITICAL: Immediately delete the used token to prevent reuse.
 	// If we can't delete the token, we must not issue a new one.
 	if err := t.queries.DeleteRefreshTokenByID(ctx, oldToken.ID); err != nil {
-		return nil, fmt.Errorf("failed to delete old refresh token: %w", err)
+		return nil, ErrTokenReuseDetected
 	}
 
 	if time.Now().Unix() > oldToken.ExpiresAt {
@@ -107,8 +107,8 @@ func (t *sqliteTokenStore) RotateRefreshToken(ctx context.Context, refreshTokenS
 	}
 
 	userResp, err := t.queries.GetUserByID(ctx, oldToken.UserID)
-	if err != nil {
-		return nil, fmt.Errorf("could not find user for refresh token: %w", err)
+	if err != nil { //user doesn't exist, invalid
+		return nil, ErrInvalidToken
 	}
 
 	user, err := transform.FromSQLiteUser(userResp)

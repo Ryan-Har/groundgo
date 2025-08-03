@@ -18,7 +18,7 @@ type CreateUserParams struct {
 type User struct {
 	ID            uuid.UUID `json:"id"`
 	Email         string    `json:"email"`
-	PasswordHash  *string   `json:"passwordHash"`
+	PasswordHash  *string   `json:"-"`
 	Role          Role      `json:"role"`
 	Claims        Claims    `json:"claims"`
 	OauthProvider *string   `json:"oauthProvider"`
