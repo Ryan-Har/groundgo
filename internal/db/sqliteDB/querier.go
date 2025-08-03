@@ -29,6 +29,9 @@ type Querier interface {
 	// Inserts a new user into the database.
 	// Returns the newly created user's ID.
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	// DeleteExpiredRefreshTokens purges tokens from the refresh list
+	// after they would have naturally expired. This keeps the table clean.
+	DeleteExpiredRefreshTokens(ctx context.Context) error
 	// DeleteExpiredRevokedTokens purges tokens from the revocation list
 	// after they would have naturally expired. This keeps the table clean.
 	DeleteExpiredRevokedTokens(ctx context.Context) error

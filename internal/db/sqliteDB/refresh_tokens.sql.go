@@ -56,6 +56,18 @@ func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshToken
 	return i, err
 }
 
+const deleteExpiredRefreshTokens = `-- name: DeleteExpiredRefreshTokens :exec
+DELETE FROM refresh_tokens
+WHERE expires_at <= strftime('%s', 'now')
+`
+
+// DeleteExpiredRefreshTokens purges tokens from the refresh list
+// after they would have naturally expired. This keeps the table clean.
+func (q *Queries) DeleteExpiredRefreshTokens(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteExpiredRefreshTokens)
+	return err
+}
+
 const deleteRefreshTokenByID = `-- name: DeleteRefreshTokenByID :exec
 DELETE FROM refresh_tokens
 WHERE id = ?

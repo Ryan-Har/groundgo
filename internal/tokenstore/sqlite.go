@@ -188,11 +188,17 @@ func (t *sqliteTokenStore) startCleanupWorker(interval time.Duration) {
 			select {
 			case <-ticker.C:
 				cleanupCtx, cancel := context.WithTimeout(context.Background(), interval/2) // Give it a max half the interval
+				defer cancel()                                                              // Release resources associated with this context
+
 				err := t.queries.DeleteExpiredRevokedTokens(cleanupCtx)
 				if err != nil && err != context.Canceled && err != context.DeadlineExceeded {
 					t.log.Error("failed to cleanup revoked tokens", "err", err)
 				}
-				cancel() // Release resources associated with this context
+
+				err = t.queries.DeleteExpiredRefreshTokens(cleanupCtx)
+				if err != nil && err != context.Canceled && err != context.DeadlineExceeded {
+					t.log.Error("failed to cleanup revoked tokens", "err", err)
+				}
 
 			case <-t.stopCh:
 				t.log.Info("Stopping revoked tokens cleanup worker")

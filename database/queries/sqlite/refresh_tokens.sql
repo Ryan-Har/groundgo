@@ -37,3 +37,9 @@ WHERE id = ?;
 -- is detected or if they request a "log out from all devices" action.
 DELETE FROM refresh_tokens
 WHERE user_id = ?;
+
+-- name: DeleteExpiredRefreshTokens :exec
+-- DeleteExpiredRefreshTokens purges tokens from the refresh list
+-- after they would have naturally expired. This keeps the table clean.
+DELETE FROM refresh_tokens
+WHERE expires_at <= strftime('%s', 'now');
