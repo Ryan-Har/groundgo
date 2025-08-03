@@ -18,6 +18,7 @@ type baseTokenStore struct {
 	jwtSecret            string
 	tokenDuration        time.Duration
 	refreshTokenDuration time.Duration
+	stopCh               chan struct{} // channel used to stop the cleanup of expired sessions
 }
 
 func NewBase(logger *slog.Logger, signingSecret string, tokenDuration time.Duration) *baseTokenStore {
@@ -26,6 +27,7 @@ func NewBase(logger *slog.Logger, signingSecret string, tokenDuration time.Durat
 		jwtSecret:            signingSecret,
 		tokenDuration:        tokenDuration,
 		refreshTokenDuration: time.Hour * 24 * 7,
+		stopCh:               make(chan struct{}),
 	}
 }
 

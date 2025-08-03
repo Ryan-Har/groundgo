@@ -16,6 +16,9 @@ import (
 	"github.com/google/uuid"
 )
 
+// cleanup interval represents the time between checks for cleaning up the expired, revoked tokens
+var cleanupInterval time.Duration = time.Minute * 10
+
 type sqliteTokenStore struct {
 	*baseTokenStore
 	db      *sql.DB
@@ -23,11 +26,13 @@ type sqliteTokenStore struct {
 }
 
 func NewSqlite(logger *slog.Logger, signingSecret string, tokenDuration time.Duration, db *sql.DB) *sqliteTokenStore {
-	return &sqliteTokenStore{
+	t := &sqliteTokenStore{
 		baseTokenStore: NewBase(logger, signingSecret, tokenDuration),
 		db:             db,
 		queries:        *sqliteDB.New(db),
 	}
+	t.startCleanupWorker(cleanupInterval)
+	return t
 }
 
 // IssueTokenPair generates a new access and refresh token pair for the user.
@@ -75,6 +80,7 @@ func (t *sqliteTokenStore) IssueTokenPair(ctx context.Context, user *models.User
 
 // RotateRefreshToken validates an old refresh token and issues a new token pair.
 func (t *sqliteTokenStore) RotateRefreshToken(ctx context.Context, refreshTokenStr string) (*TokenPair, error) {
+	defer logutil.NewTimingLogger(t.log, time.Now(), "executed sql query", "method", "rotate refresh token")()
 
 	refreshTokenHash := hashToken(refreshTokenStr)
 
@@ -140,7 +146,7 @@ func (t *sqliteTokenStore) ParseAccessToken(ctx context.Context, tokenStr string
 
 	payload, ok := token.Claims.(*AccessToken)
 	if !ok || !token.Valid {
-		return nil, errors.New("invalid token or claims")
+		return nil, ErrInvalidToken
 	}
 
 	return payload, nil
@@ -168,4 +174,30 @@ func (t *sqliteTokenStore) RevokeAccessToken(ctx context.Context, token *AccessT
 	_, err := t.queries.RevokeToken(ctx, params)
 
 	return err
+}
+
+// StartCleanupWorker starts a goroutine that periodically cleans up revoked tokens.
+// The interval specifies how often the cleanup should run.
+func (t *sqliteTokenStore) startCleanupWorker(interval time.Duration) {
+	t.log.Debug("Starting revoked tokens cleanup worker", "interval", interval)
+	ticker := time.NewTicker(interval)
+
+	go func() {
+		defer ticker.Stop() // Ensure the ticker is stopped when the goroutine exits
+		for {
+			select {
+			case <-ticker.C:
+				cleanupCtx, cancel := context.WithTimeout(context.Background(), interval/2) // Give it a max half the interval
+				err := t.queries.DeleteExpiredRevokedTokens(cleanupCtx)
+				if err != nil && err != context.Canceled && err != context.DeadlineExceeded {
+					t.log.Error("failed to cleanup revoked tokens", "err", err)
+				}
+				cancel() // Release resources associated with this context
+
+			case <-t.stopCh:
+				t.log.Info("Stopping revoked tokens cleanup worker")
+				return // Exit the goroutine
+			}
+		}
+	}()
 }

@@ -11,6 +11,9 @@ import (
 	"github.com/Ryan-Har/groundgo/pkg/models"
 )
 
+// cleanup interval represents the time between checks for cleaning up the expired sessions
+var cleanupInterval time.Duration = time.Minute * 10
+
 func NewInMemory(logger *slog.Logger) *inMemorySessionStore {
 	s := &inMemorySessionStore{
 		baseSessionStore: NewBase(logger, 32, time.Minute*30),
@@ -19,7 +22,7 @@ func NewInMemory(logger *slog.Logger) *inMemorySessionStore {
 		log:              logger,
 	}
 
-	s.startCleanupWorker(s, time.Second*10)
+	s.startCleanupWorker(s, cleanupInterval)
 	return s
 }
 
@@ -31,7 +34,7 @@ func NewSqlite(logger *slog.Logger, db *sql.DB) *sqliteSessionStore {
 		log:              logger,
 	}
 
-	s.startCleanupWorker(s, time.Second*10)
+	s.startCleanupWorker(s, cleanupInterval)
 	return s
 }
 
