@@ -1,0 +1,683 @@
+openapi: 3.0.3
+info:
+  title: Auth API
+  version: "1.0.0"
+  description: |
+    A comprehensive authentication and authorization API for the GroundGo library.
+    Provides user management, role-based access control, and hierarchical path-specific claims.
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  
+servers:
+  - url: 'http://127.0.0.1:8080/api/v1'
+    description: Development server
+  - url: https://api.groundgo.com/v1
+    description: Production server
+
+security:
+  - BearerAuth: []
+   
+paths:
+  /auth/login:
+    post:
+      operationId: postAuthLogin
+      security: []
+      tags:
+        - Authentication
+      summary: User login
+      description: Authenticate user with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Successful login
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/InvalidCredentials'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/logout:
+    post:
+      operationId: postAuthLogout
+      tags:
+        - Authentication
+      summary: User logout
+      description: Invalidate current session
+      responses:
+        '204':
+          description: Successfully logged out
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/refresh:
+    post:
+      operationId:  postAuthRefresh
+      security: 
+        - RefreshToken: []
+      tags:
+        - Authentication
+      summary: Refresh access token
+      description: Generate new access token using refresh token
+      responses:
+        '200':
+          description: Token refreshed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          $ref: '#/components/responses/InvalidRefreshToken'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/verify:
+    get:
+      operationId: getAuthVerify
+      tags:
+        - Authentication
+      summary: Verify token validity
+      description: Check if current access token is valid
+      responses:
+        '200':
+          description: Token is valid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenValidationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users:
+    get:
+      operationId: getUsers
+      tags:
+        - Users
+      summary: List users
+      description: Retrieve a list of all users (admin only)
+      parameters:
+        - name: page
+          in: query
+          description: Page number for pagination
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: role
+          in: query
+          description: Filter users by role
+          schema:
+            $ref: "#/components/schemas/Role"
+      responses:
+        '200':
+          description: Users retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      operationId: postUsers
+      tags:
+        - Users
+      summary: Create new user
+      description: Create a new user account (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users/{id}:
+    get:
+      operationId: getUserByID
+      tags:
+        - Users
+      summary: Get user by ID
+      description: Retrieve a specific user by their ID
+      parameters:
+        - $ref: "#/components/parameters/UserIdParam"
+      responses:
+        '200':
+          description: User retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: "#/components/responses/Forbidden"
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  
+    put: 
+      operationId: updateUserByID
+      tags: 
+        -  Users
+      summary: Update a single user by ID
+      description: |
+        Update a single user. For use by admin.
+        - Partial updates are allowed
+        - To update your own profile if you you do not have permission use path /users/me
+      parameters: 
+        - $ref: "#/components/parameters/UserIdParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserUpdateRequest"
+      responses: 
+        '200':
+          description: User updated successfully
+          content:
+            application/json:
+              schema: 
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: "#/components/responses/Forbidden"
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      
+    delete: 
+      operationId: deleteUserByID
+      tags: 
+        -  Users
+      summary: Permanently delete a single user by ID
+      parameters: 
+        - $ref: "#/components/parameters/UserIdParam"
+      responses:
+        '204':
+          description: "delete Successful"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: "#/components/responses/Forbidden"
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  
+  /users/me:
+    get:
+      operationId: getOwnUser
+      tags:
+        - Self Service
+      summary: Get logged in user
+      description: Retrieve a users own User record
+      responses:
+        '200':
+          description: User retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: "#/components/responses/Forbidden"
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users/me/change-password:
+    post:
+      operationId: changeOwnPassword
+      tags: 
+        - Self Service
+      summary: Change password of logged in user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordUpdateRequest"
+      responses: 
+        '204':
+          description: Password changed successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      
+      
+          
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from login endpoint
+    RefreshToken:
+      type: apiKey
+      in: cookie
+      name: refresh_token
+      description: Refresh token stored in httpOnly cookie
+
+  responses:
+    BadRequest:
+      description: Invalid request format or parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            invalidJson:
+              summary: Invalid JSON format
+              value:
+                error: "invalid JSON format"
+                details: "Expected valid JSON object"
+            missingField:
+              summary: Missing required field
+              value:
+                error: "validation failed"
+                details: "email is required"
+
+    Unauthorized:
+      description: Authentication required or token invalid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            missingToken:
+              summary: Missing authentication token
+              value:
+                error: "authentication required"
+                details: "Bearer token must be provided"
+            invalidToken:
+              summary: Invalid token
+              value:
+                error: "invalid token"
+                details: "Token is expired or malformed"
+
+    Forbidden:
+      description: Access denied - insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "access denied"
+            details: "Insufficient permissions for this operation"
+
+    NotFound:
+      description: Requested resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "resource not found"
+            details: "User with specified ID does not exist"
+
+    Conflict:
+      description: Resource conflict (e.g., email already exists)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "resource conflict"
+            details: "User with this email already exists"
+
+    InvalidCredentials:
+      description: Invalid login credentials
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "invalid credentials"
+            details: "Email or password is incorrect"
+
+    InvalidRefreshToken:
+      description: Invalid or expired refresh token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            missingToken:
+              summary: Missing refresh token
+              value:
+                error: "missing refresh token"
+                details: "Refresh token cookie not found"
+            invalidToken:
+              summary: Invalid refresh token
+              value:
+                error: "invalid refresh token"
+                details: "Token is expired, invalid, or has been revoked"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "internal server error"
+            details: "An unexpected error occurred"
+
+  parameters:
+    UserIdParam:
+      name: id
+      in: path
+      required: true
+      description: User ID
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    # Base schemas
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+        details:
+          type: string
+          description: Additional error details
+          nullable: true
+      required:
+        - error
+
+    PaginationMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+          description: Current page number
+        limit:
+          type: integer
+          description: Items per page
+        total:
+          type: integer
+          description: Total number of items
+        totalPages:
+          type: integer
+          description: Total number of pages
+      required:
+        - page
+        - limit
+        - total
+        - totalPages
+
+    # Request schemas
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          $ref: "#/components/schemas/Email"
+        password:
+          type: string
+          minLength: 8
+          description: User's password
+      required:
+        - email
+        - password
+
+    CreateUserRequest:
+      type: object
+      properties:
+        email:
+          $ref: "#/components/schemas/Email"
+        password:
+          type: string
+          minLength: 8
+          description: User's password
+        role:
+          $ref: "#/components/schemas/Role"
+          default: "user"
+        claims:
+          $ref: "#/components/schemas/Claims"
+      required:
+        - email
+        - password
+
+    UserUpdateRequest:
+      type: object
+      properties:
+        email:
+          $ref: "#/components/schemas/Email"
+        role:
+          $ref: "#/components/schemas/Role"
+        claims:
+          $ref: '#/components/schemas/Claims'
+        oauthProvider:
+          type: string
+          nullable: true
+          description: OAuth provider (if OAuth login used)
+        isActive:
+          type: boolean
+          description: Whether the user account is active
+      additionalProperties: false
+      description: Fields allowed to be updated in a user record
+
+    PasswordUpdateRequest:
+      type: object
+      properties:
+        currentPassword:
+          type: string
+          description: Current password
+        newPassword:
+          type: string
+          description: New password
+      required:
+        - currentPassword
+        - newPassword
+      description: required 
+
+    # Entity schemas
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique user identifier
+        email:
+          $ref: "#/components/schemas/Email"
+        role:
+          $ref: "#/components/schemas/Role"
+        claims:
+          $ref: '#/components/schemas/Claims'
+        oauthProvider:
+          type: string
+          nullable: true
+          description: OAuth provider (if OAuth login used)
+        oauthId:
+          type: string
+          nullable: true
+          description: OAuth provider user ID
+        createdAt:
+          type: string
+          format: date-time
+          description: Account creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+        isActive:
+          type: boolean
+          description: Whether the user account is active
+      required:
+        - id
+        - email
+        - role
+        - claims
+        - createdAt
+        - updatedAt
+        - isActive
+    
+    Email:
+      type: string
+      format: email
+      description: User's email address
+      example: "user@example.com"
+
+    Claims:
+      type: object
+      description: |
+       Claims is an object mapping API paths to user roles.
+
+        - Each key is an API path (e.g. "/", "/users")
+        - Each value is the role required to access that path
+        - Roles are defined in the Role schema (see #/components/schemas/Role)
+        - The root path "/" and the users assigned role will always be synced up. Updating the root path will update the users role and vice versa
+      additionalProperties:
+        $ref: "#/components/schemas/Role"
+      example:
+        "/": Admin
+        "/users": User
+
+    Role:
+      type: string
+      enum:
+        - guest
+        - readonly
+        - user
+        - auditor
+        - editor
+        - moderator
+        - support
+        - admin
+        - owner
+        - sysadmin
+      description: Possible user roles in the system
+
+    # Response schemas
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: JWT access token
+        refreshToken:
+          type: string
+          description: Refresh token (also set as httpOnly cookie)
+          nullable: true
+        expiresIn:
+          type: integer
+          description: Token expiration time in seconds
+        user:
+          $ref: '#/components/schemas/User'
+      required:
+        - token
+        - expiresIn
+        - user
+
+    TokenResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: New JWT access token
+        expiresIn:
+          type: integer
+          description: Token expiration time in seconds
+      required:
+        - token
+        - expiresIn
+
+    TokenValidationResponse:
+      type: object
+      properties:
+        valid:
+          type: boolean
+          description: Whether the token is valid
+        expiresAt:
+          type: string
+          format: date-time
+          description: Token expiration time
+          nullable: true
+      required:
+        - valid
+
+    UserResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+      required:
+        - user
+
+    UserListResponse:
+      type: object
+      properties:
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+      required:
+        - users
+        - meta

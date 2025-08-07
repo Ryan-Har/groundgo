@@ -2,7 +2,7 @@
 
 > An opinionated, extensible authentication and authorization library for Go web applications.
 
-`groundgo` provides a structured foundation for building secure Go-based web projects. It combines role-based access control with hierarchical path-specific claims, session and (soon) JWT support, and optional web views or APIs for user management.
+`groundgo` provides a structured foundation for building secure Go-based web projects. It combines role-based access control with hierarchical path-specific claims, session and JWT support, and optional web views or APIs for user management.
 
 ---
 
