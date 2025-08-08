@@ -1,4 +1,4 @@
-# Makefile for Go project with GoTrue, Casbin, and PostgreSQL
+# Makefile for GroundGo
 
 # Configuration
 APP_NAME := GroundGo
@@ -41,17 +41,17 @@ generate: sqlc-generate templ-generate ## Generate all code (templ templates, et
 .PHONY: templ-generate
 templ-generate: ## Generate code from templ templates
 	@echo "$(COLOR_BLUE)Generating templ code...$(COLOR_RESET)"
-	templ generate
+	$(GO) tool templ generate
 
 .PHONY: watch-templ
 watch-templ: ## Watch templ files for changes and regenerate
 	@echo "$(COLOR_BLUE)Watching templ files for changes...$(COLOR_RESET)"
-	templ generate --watch --proxy="http://localhost:8080" --cmd="go run cmd/main.go"
+	$(GO) tool templ generate --watch --proxy="http://localhost:8080" --cmd="go run cmd/main.go"
 
 .PHONY: sqlc-generate
 sqlc-generate: ## Generate code from templ templates
 	@echo "$(COLOR_BLUE)Generating sqlc code...$(COLOR_RESET)"
-	sqlc generate --file database/sqlite_sqlc.yaml
+	$(GO) tool sqlc generate --file database/sqlite_sqlc.yaml
 
 .PHONY: test
 test: ## Run tests
@@ -66,7 +66,7 @@ fmt: ## Format code
 .PHONY: lint
 lint: ## Run linters
 	@echo "$(COLOR_BLUE)Running linters...$(COLOR_RESET)"
-	golangci-lint run ./...
+	$(GO) tool golangci-lint run ./...
 
 .PHONY: clean
 clean: ## Clean build artifacts
@@ -77,11 +77,10 @@ clean: ## Clean build artifacts
 .PHONY: install-tools
 install-tools: ## Install development tools
 	@echo "$(COLOR_BLUE)Installing development tools...$(COLOR_RESET)"
-	go install github.com/a-h/templ/cmd/templ@latest
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-	go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
-	go install -tags 'sqlite' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
-	go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+	$(GO) get -tool github.com/a-h/templ/cmd/templ@latest
+	$(GO) get -tool github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	$(GO) get -tool github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+	$(GO) get -tool github.com/sqlc-dev/sqlc/cmd/sqlc@latest
 
 .PHONY: deps
 deps: ## Install dependencies
