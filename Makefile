@@ -36,7 +36,7 @@ run: generate ## Run the application
 	$(GO) run ./cmd/main.go
 
 .PHONY: generate
-generate: sqlc-generate templ-generate ## Generate all code (templ templates, etc.)
+generate: sqlc-generate templ-generate oapi-generate ## Generate all code (templ templates, etc.)
 
 .PHONY: templ-generate
 templ-generate: ## Generate code from templ templates
@@ -49,9 +49,14 @@ watch-templ: ## Watch templ files for changes and regenerate
 	$(GO) tool templ generate --watch --proxy="http://localhost:8080" --cmd="go run cmd/main.go"
 
 .PHONY: sqlc-generate
-sqlc-generate: ## Generate code from templ templates
+sqlc-generate: ## Generate code from sqlc templates
 	@echo "$(COLOR_BLUE)Generating sqlc code...$(COLOR_RESET)"
 	$(GO) tool sqlc generate --file database/sqlite_sqlc.yaml
+
+.PHONY: oapi-generate
+oapi-generate: ## Generate code from open api templates
+	@echo "$(COLOR_BLUE)Generating open api code...$(COLOR_RESET)"
+	$(GO) tool oapi-codegen -generate types -package gen api/openApi.yaml > pkg/api/gen/openapi.gen.go
 
 .PHONY: test
 test: ## Run tests
@@ -81,6 +86,7 @@ install-tools: ## Install development tools
 	$(GO) get -tool github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 	$(GO) get -tool github.com/golang-migrate/migrate/v4/cmd/migrate@latest
 	$(GO) get -tool github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+	$(GO) get -tool github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest
 
 .PHONY: deps
 deps: ## Install dependencies
