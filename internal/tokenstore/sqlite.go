@@ -73,8 +73,9 @@ func (t *sqliteTokenStore) IssueTokenPair(ctx context.Context, user *models.User
 	}
 
 	return &TokenPair{
-		AccessToken:  signedAccessToken,
-		RefreshToken: refreshToken,
+		AccessToken:      signedAccessToken,
+		RefreshToken:     refreshToken,
+		ExpiresInSeconds: int64(t.tokenDuration.Seconds()),
 	}, nil
 }
 

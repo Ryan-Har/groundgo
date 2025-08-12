@@ -57,7 +57,7 @@ func (s *sqliteAuthStore) CreateUser(ctx context.Context, args models.CreateUser
 	sqlUser, err := s.queries.CreateUser(ctx, params)
 	if err != nil {
 		return nil, logutil.LogAndWrapErr(s.log, errMsg,
-			models.NewDatabaseError(err.Error()),
+			models.NewDatabaseError(err),
 		)
 	}
 	user, err := transform.FromSQLiteUser(sqlUser)
@@ -76,7 +76,7 @@ func (s *sqliteAuthStore) GetUserByEmail(ctx context.Context, email string) (*mo
 	sqlUser, err := s.queries.GetUserByEmail(ctx, email)
 	if err != nil {
 		return nil, logutil.DebugAndWrapErr(s.log, errMsg,
-			models.NewDatabaseError(err.Error()),
+			models.NewDatabaseError(err),
 		)
 	}
 	user, err := transform.FromSQLiteUser(sqlUser)
@@ -101,7 +101,7 @@ func (s *sqliteAuthStore) GetUserByID(ctx context.Context, id uuid.UUID) (*model
 	sqlUser, err := s.queries.GetUserByID(ctx, id.String())
 	if err != nil {
 		return nil, logutil.DebugAndWrapErr(s.log, errMsg,
-			models.NewDatabaseError(err.Error()),
+			models.NewDatabaseError(err),
 		)
 	}
 	user, err := transform.FromSQLiteUser(sqlUser)
@@ -129,7 +129,7 @@ func (s *sqliteAuthStore) GetUserByOAuth(ctx context.Context, args models.UserOA
 	sqlUser, err := s.queries.GetUserByOAuth(ctx, params)
 	if err != nil {
 		return nil, logutil.DebugAndWrapErr(s.log, errMsg,
-			models.NewDatabaseError(err.Error()),
+			models.NewDatabaseError(err),
 		)
 	}
 
@@ -151,7 +151,7 @@ func (s *sqliteAuthStore) ListAllUsers(ctx context.Context) ([]*models.User, err
 	sqlUsers, err := s.queries.ListAllUsers(ctx)
 	if err != nil {
 		return users, logutil.DebugAndWrapErr(s.log, errMsg,
-			models.NewDatabaseError(err.Error()),
+			models.NewDatabaseError(err),
 		)
 	}
 
@@ -191,7 +191,7 @@ func (s *sqliteAuthStore) SoftDeleteUser(ctx context.Context, id uuid.UUID) erro
 
 	if err != nil {
 		return logutil.DebugAndWrapErr(s.log, errMsg,
-			models.NewDatabaseError(err.Error()),
+			models.NewDatabaseError(err),
 		)
 	}
 	return nil
@@ -214,7 +214,7 @@ func (s *sqliteAuthStore) RestoreUser(ctx context.Context, id uuid.UUID) error {
 
 	if err != nil {
 		return logutil.DebugAndWrapErr(s.log, errMsg,
-			models.NewDatabaseError(err.Error()),
+			models.NewDatabaseError(err),
 		)
 	}
 	return nil
@@ -234,7 +234,7 @@ func (s *sqliteAuthStore) HardDeleteUser(ctx context.Context, id uuid.UUID) erro
 
 	if err != nil {
 		return logutil.DebugAndWrapErr(s.log, errMsg,
-			models.NewDatabaseError(err.Error()),
+			models.NewDatabaseError(err),
 		)
 	}
 	return nil
@@ -254,7 +254,7 @@ func (s *sqliteAuthStore) UpdateUserRole(ctx context.Context, id uuid.UUID, role
 	user, err := s.queries.GetUserByID(ctx, id.String())
 	if err != nil {
 		return logutil.DebugAndWrapErr(s.log, errMsg,
-			models.NewDatabaseError(err.Error()),
+			models.NewDatabaseError(err),
 		)
 	}
 
@@ -284,7 +284,7 @@ func (s *sqliteAuthStore) UpdateUserRole(ctx context.Context, id uuid.UUID, role
 	})
 	if err != nil {
 		return logutil.DebugAndWrapErr(s.log, errMsg,
-			models.NewDatabaseError(err.Error()),
+			models.NewDatabaseError(err),
 		)
 	}
 
@@ -304,7 +304,7 @@ func (s *sqliteAuthStore) UpdateUserClaims(ctx context.Context, id uuid.UUID, cl
 	user, err := s.queries.GetUserByID(ctx, id.String())
 	if err != nil {
 		return logutil.DebugAndWrapErr(s.log, errMsg,
-			models.NewDatabaseError(err.Error()),
+			models.NewDatabaseError(err),
 		)
 	}
 
@@ -330,7 +330,7 @@ func (s *sqliteAuthStore) UpdateUserClaims(ctx context.Context, id uuid.UUID, cl
 
 	if err != nil {
 		return logutil.DebugAndWrapErr(s.log, errMsg,
-			models.NewDatabaseError(err.Error()),
+			models.NewDatabaseError(err),
 		)
 	}
 
@@ -360,7 +360,7 @@ func (s *sqliteAuthStore) UpdateUserPassword(ctx context.Context, id uuid.UUID, 
 	})
 	if err != nil {
 		return logutil.DebugAndWrapErr(s.log, errMsg,
-			models.NewDatabaseError(err.Error()),
+			models.NewDatabaseError(err),
 		)
 	}
 	return nil

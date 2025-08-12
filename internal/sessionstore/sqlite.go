@@ -40,7 +40,7 @@ func (s *sqliteSessionStore) Create(ctx context.Context, userID uuid.UUID) (*mod
 	session, err := s.queries.CreateSession(ctx, transform.ToSQLiteCreateSessionParams(*sesh))
 	if err != nil {
 		return nil, logutil.LogAndWrapErr(s.log, "failed to create session",
-			models.NewDatabaseError(err.Error()))
+			models.NewDatabaseError(err))
 	}
 
 	response, err := transform.FromSQLiteSession(session)
@@ -69,7 +69,7 @@ func (s *sqliteSessionStore) Get(ctx context.Context, sessionID string) (*models
 			return nil, newSessionExpiredError(sessionID)
 		}
 		return nil, logutil.DebugAndWrapErr(s.log, "failed to get session",
-			models.NewDatabaseError(err.Error()),
+			models.NewDatabaseError(err),
 			"session id", sessionID)
 	}
 
@@ -98,7 +98,7 @@ func (s *sqliteSessionStore) Delete(ctx context.Context, sessionID string) error
 			return nil
 		}
 		return logutil.DebugAndWrapErr(s.log, "failed to delete session",
-			models.NewDatabaseError(err.Error()),
+			models.NewDatabaseError(err),
 			"session id", sessionID)
 	}
 
@@ -125,7 +125,7 @@ func (s *sqliteSessionStore) Renew(ctx context.Context, sessionID string) (*mode
 			return nil, newSessionExpiredError(sessionID)
 		}
 		return nil, logutil.DebugAndWrapErr(s.log, "failed to renew session",
-			models.NewDatabaseError(err.Error()),
+			models.NewDatabaseError(err),
 			"session id", sessionID)
 	}
 
@@ -149,7 +149,7 @@ func (s *sqliteSessionStore) DeleteUser(ctx context.Context, userID uuid.UUID) e
 	}
 
 	if err := s.queries.DeleteSessionsByUserID(ctx, userID.String()); err != nil {
-		return models.NewDatabaseError(err.Error())
+		return models.NewDatabaseError(err)
 	}
 
 	return nil

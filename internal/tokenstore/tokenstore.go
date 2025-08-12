@@ -33,8 +33,9 @@ func NewBase(logger *slog.Logger, signingSecret string, tokenDuration time.Durat
 
 // TokenPair holds both a new access token and a new refresh token.
 type TokenPair struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
+	AccessToken      string `json:"access_token"`
+	RefreshToken     string `json:"refresh_token"`
+	ExpiresInSeconds int64  `json:"expires_in"`
 }
 
 // This is the access token prior to it being signed
