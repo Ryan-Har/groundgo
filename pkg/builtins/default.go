@@ -89,9 +89,16 @@ func (b *Builtin) LoadDefaultAdminRoute() error {
 
 func (b *Builtin) LoadDefaultAPIRoutes() error {
 	return b.registerRoutes(map[string]http.HandlerFunc{
+		// auth
 		"GET /api/v1/token/verify":  b.handler.handleAPITokenVerify(),
 		"GET /api/v1/token/refresh": b.handler.handleAPITokenRefresh(),
 		"POST /api/v1/login":        b.handler.handleAPILoginPost(),
+		"POST /api/v1/logout":       b.handler.handleAPILogoutPost(),
+		// users
+		"GET /api/v1/users/{id}": b.handler.handleAPIGetUserByID(),
+		//self
+		"GET /api/v1/users/me":                 b.handler.handleAPIGetOwnUser(),
+		"GET /api/v1/users/me/change-password": b.handler.HandleAPIChangeOwnPassword(),
 	})
 }
 
