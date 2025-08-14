@@ -28,6 +28,19 @@ type User struct {
 	IsActive      bool      `json:"isActive"`
 }
 
+type GetPaginatedUsersParams struct {
+	Page  int   `json:"page"`
+	Limit int   `json:"limit"`
+	Role  *Role `json:"role"`
+}
+
+type PaginationMeta struct {
+	Limit      int `json:"limit"`
+	Page       int `json:"page"`
+	Total      int `json:"total"`
+	TotalPages int `json:"totalPages"`
+}
+
 func (u *User) EnsureRootClaim() {
 	u.Claims.AddRole("/", u.Role)
 }

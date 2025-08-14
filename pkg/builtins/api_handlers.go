@@ -286,3 +286,57 @@ func (h *Handler) HandleAPIChangeOwnPassword() http.HandlerFunc {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
+
+func (h *Handler) handleAPIGetUsers() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
+
+		var params models.GetPaginatedUsersParams
+
+		if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+			api.ReturnError(w, h.log, api.BadRequestInvalidJSON)
+			return
+		}
+
+		if params.Page < 1 {
+			code, resp := api.BadRequestValidation("page must be greater than 0")
+			api.RespondJSONAndLog(w, h.log, code, resp)
+			return
+		}
+
+		if params.Limit > 100 || params.Limit < 1 {
+			code, resp := api.BadRequestValidation("limit must be between 1 and 100")
+			api.RespondJSONAndLog(w, h.log, code, resp)
+			return
+		}
+
+		usersPtr, meta, err := h.auth.ListUsersPaginatedWithRoleFilter(r.Context(), params)
+		if err != nil {
+			h.log.Error("failed to get paginated users with role filter", "err", err)
+			api.ReturnError(w, h.log, api.InternalServerError)
+			return
+		}
+
+		if len(usersPtr) == 0 {
+			code, resp := api.NotFound("no results")
+			api.RespondJSONAndLog(w, h.log, code, resp)
+			return
+		}
+
+		// Convert []*User -> []User for API response
+		usersVal := make([]models.User, len(usersPtr))
+		for i, u := range usersPtr {
+			if u != nil {
+				usersVal[i] = *u
+			}
+		}
+
+		userResp := api.GetUsersResponse{
+			Users: usersVal,
+			Meta:  meta,
+		}
+
+		// If found, respond with a 200 OK and the user data in JSON
+		api.RespondJSONAndLog(w, h.log, http.StatusOK, userResp)
+	}
+}

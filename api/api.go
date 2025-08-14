@@ -65,3 +65,8 @@ type PasswordUpdateRequest struct {
 	CurrentPassword string `json:"currentPassword"`
 	NewPassword     string `json:"newPassword"`
 }
+
+type GetUsersResponse struct {
+	Users []models.User         `json:"users"`
+	Meta  models.PaginationMeta `json:"meta"`
+}
