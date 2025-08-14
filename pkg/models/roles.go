@@ -3,6 +3,7 @@ package models
 import (
 	"fmt"
 	"slices"
+	"strings"
 )
 
 // Role represents a user role in the system
@@ -75,7 +76,7 @@ func (r Role) String() string {
 
 // UnmarshalText and MarshalText methods
 func (r *Role) UnmarshalText(text []byte) error {
-	s := Role(text)
+	s := Role(strings.ToLower(string(text)))
 	if !s.IsValid() {
 		return fmt.Errorf("invalid role: %s", text)
 	}
