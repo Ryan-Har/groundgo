@@ -591,7 +591,8 @@ components:
         - Each key is an API path (e.g. "/", "/users")
         - Each value is the role required to access that path
         - Roles are defined in the Role schema (see #/components/schemas/Role)
-        - The root path "/" and the users assigned role will always be synced up. Updating the root path will update the users role and vice versa
+        - The root path "/" and the users assigned role will always be synced up. Updating the root path will update the users role and vice versa.
+        - If both the root path and the role are added but different, the role will take precident.
       additionalProperties:
         $ref: "#/components/schemas/Role"
       example:

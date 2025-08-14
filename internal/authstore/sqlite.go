@@ -9,6 +9,7 @@ import (
 	"math"
 	"time"
 
+	"github.com/Ryan-Har/groundgo/internal/db"
 	"github.com/Ryan-Har/groundgo/internal/db/sqliteDB"
 	"github.com/Ryan-Har/groundgo/internal/logutil"
 	"github.com/Ryan-Har/groundgo/pkg/models"
@@ -56,9 +57,9 @@ func (s *sqliteAuthStore) CreateUser(ctx context.Context, args models.CreateUser
 
 	sqlUser, err := s.queries.CreateUser(ctx, params)
 	if err != nil {
+		_, err := db.WrapErrorIfDuplciateConstraint(err)
 		return nil, logutil.LogAndWrapErr(s.log, errMsg,
-			models.NewDatabaseError(err),
-		)
+			models.NewDatabaseError(err))
 	}
 	user, err := sqlUser.ToUserModel()
 	if err != nil {

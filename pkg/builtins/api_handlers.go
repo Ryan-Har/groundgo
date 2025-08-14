@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/mail"
 	"time"
 
 	"github.com/Ryan-Har/groundgo/api"
+	"github.com/Ryan-Har/groundgo/internal/db"
 	"github.com/Ryan-Har/groundgo/internal/tokenstore"
 	"github.com/Ryan-Har/groundgo/pkg/enforcer"
 	"github.com/Ryan-Har/groundgo/pkg/models"
@@ -338,5 +340,55 @@ func (h *Handler) handleAPIGetUsers() http.HandlerFunc {
 
 		// If found, respond with a 200 OK and the user data in JSON
 		api.RespondJSONAndLog(w, h.log, http.StatusOK, userResp)
+	}
+}
+
+func (h *Handler) handleAPICreateUser() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
+
+		var params models.CreateUserParams
+
+		if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+			fmt.Println("ERROR DECODING: ", err)
+			api.ReturnError(w, h.log, api.BadRequestInvalidJSON)
+			return
+		}
+
+		emailAddr, err := mail.ParseAddress(params.Email)
+		if err != nil {
+			code, resp := api.BadRequestValidation(fmt.Sprintf("provided email address %s is not a valid RFC 5322 format", emailAddr))
+			api.RespondJSONAndLog(w, h.log, code, resp)
+			return
+		}
+
+		params.Email = emailAddr.Address
+
+		if params.Password == nil {
+			code, resp := api.BadRequestValidation("please provide a password")
+			api.RespondJSONAndLog(w, h.log, code, resp)
+			return
+		}
+
+		user, err := h.auth.CreateUser(r.Context(), params)
+		if err != nil {
+			var valErr *models.ValidationError
+			if errors.As(err, &valErr) {
+				code, resp := api.BadRequestValidation(valErr.Error())
+				api.RespondJSONAndLog(w, h.log, code, resp)
+				return
+			}
+
+			var dupErr *db.DuplicateKeyError
+			if errors.As(err, &dupErr) {
+				code, resp := api.ResourceConflict(fmt.Sprintf("%s already exists", dupErr.GetField()))
+				api.RespondJSONAndLog(w, h.log, code, resp)
+				return
+			}
+			api.ReturnError(w, h.log, api.InternalServerError)
+			return
+		}
+
+		api.RespondJSONAndLog(w, h.log, http.StatusCreated, api.UserResponse{User: *user})
 	}
 }
