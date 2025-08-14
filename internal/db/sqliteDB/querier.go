@@ -79,6 +79,9 @@ type Querier interface {
 	// ListAuditLogsForUser retrieves a paginated list of audit events for a specific user,
 	// ordered from newest to oldest.
 	ListAuditLogsForUser(ctx context.Context, arg ListAuditLogsForUserParams) ([]AuthAuditLog, error)
+	// Retrieves users from database, paginated with limit and offset.
+	// Returns total with users, useful for api pagination.
+	ListUsersPaginatedWithTotal(ctx context.Context, arg ListUsersPaginatedWithTotalParams) ([]ListUsersPaginatedWithTotalRow, error)
 	// RenewSession updates the expiration time of an active session.
 	// It only updates if the session has not already expired.
 	// Returns the updated session record, or no row if session is expired or missing.

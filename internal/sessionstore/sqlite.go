@@ -10,7 +10,6 @@ import (
 	"github.com/Ryan-Har/groundgo/internal/db/sqliteDB"
 	"github.com/Ryan-Har/groundgo/internal/logutil"
 	"github.com/Ryan-Har/groundgo/pkg/models"
-	"github.com/Ryan-Har/groundgo/pkg/models/transform"
 	"github.com/google/uuid"
 )
 
@@ -37,13 +36,13 @@ func (s *sqliteSessionStore) Create(ctx context.Context, userID uuid.UUID) (*mod
 		return nil, err
 	}
 
-	session, err := s.queries.CreateSession(ctx, transform.ToSQLiteCreateSessionParams(*sesh))
+	session, err := s.queries.CreateSession(ctx, sqliteDB.CreateSessionParamsFromModel(*sesh))
 	if err != nil {
 		return nil, logutil.LogAndWrapErr(s.log, "failed to create session",
 			models.NewDatabaseError(err))
 	}
 
-	response, err := transform.FromSQLiteSession(session)
+	response, err := session.ToSessionModel()
 	if err != nil {
 		return nil, logutil.LogAndWrapErr(s.log, "failed to create session",
 			models.NewTransformationError(err.Error()))
@@ -73,7 +72,7 @@ func (s *sqliteSessionStore) Get(ctx context.Context, sessionID string) (*models
 			"session id", sessionID)
 	}
 
-	response, err := transform.FromSQLiteSession(sesh)
+	response, err := sesh.ToSessionModel()
 	if err != nil {
 		return nil, logutil.LogAndWrapErr(s.log, "failed to create session",
 			models.NewTransformationError(err.Error()))
@@ -129,7 +128,7 @@ func (s *sqliteSessionStore) Renew(ctx context.Context, sessionID string) (*mode
 			"session id", sessionID)
 	}
 
-	response, err := transform.FromSQLiteSession(sesh)
+	response, err := sesh.ToSessionModel()
 	if err != nil {
 		return nil, logutil.LogAndWrapErr(s.log, "failed to renew session",
 			models.NewTransformationError(err.Error()))

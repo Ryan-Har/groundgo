@@ -11,7 +11,6 @@ import (
 	"github.com/Ryan-Har/groundgo/internal/db/sqliteDB"
 	"github.com/Ryan-Har/groundgo/internal/logutil"
 	"github.com/Ryan-Har/groundgo/pkg/models"
-	"github.com/Ryan-Har/groundgo/pkg/models/transform"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
@@ -112,7 +111,7 @@ func (t *sqliteTokenStore) RotateRefreshToken(ctx context.Context, refreshTokenS
 		return nil, ErrInvalidToken
 	}
 
-	user, err := transform.FromSQLiteUser(userResp)
+	user, err := userResp.ToUserModel()
 	if err != nil {
 		return nil, models.NewTransformationError(err.Error())
 	}

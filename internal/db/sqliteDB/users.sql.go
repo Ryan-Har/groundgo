@@ -276,6 +276,88 @@ func (q *Queries) ListAllUsers(ctx context.Context) ([]User, error) {
 	return items, nil
 }
 
+const listUsersPaginatedWithTotal = `-- name: ListUsersPaginatedWithTotal :many
+WITH filtered AS (
+    SELECT id, email, password_hash, role, claims, oauth_provider, oauth_id, created_at, updated_at, is_active
+    FROM users
+    WHERE (?3 IS NULL OR role = ?3)
+)
+SELECT
+    id,
+    email,
+    password_hash,
+    role,
+    claims,
+    oauth_provider,
+    oauth_id, 
+    created_at,
+    updated_at,
+    is_active,
+    COUNT(*) OVER() AS total
+FROM
+    filtered
+ORDER BY
+    created_at DESC
+LIMIT ?1 OFFSET ?2
+`
+
+type ListUsersPaginatedWithTotalParams struct {
+	Limit  int64       `json:"limit"`
+	Offset int64       `json:"offset"`
+	Role   interface{} `json:"role"`
+}
+
+type ListUsersPaginatedWithTotalRow struct {
+	ID            string  `json:"id"`
+	Email         string  `json:"email"`
+	PasswordHash  *string `json:"passwordHash"`
+	Role          string  `json:"role"`
+	Claims        *string `json:"claims"`
+	OauthProvider *string `json:"oauthProvider"`
+	OauthID       *string `json:"oauthId"`
+	CreatedAt     int64   `json:"createdAt"`
+	UpdatedAt     int64   `json:"updatedAt"`
+	IsActive      bool    `json:"isActive"`
+	Total         int64   `json:"total"`
+}
+
+// Retrieves users from database, paginated with limit and offset.
+// Returns total with users, useful for api pagination.
+func (q *Queries) ListUsersPaginatedWithTotal(ctx context.Context, arg ListUsersPaginatedWithTotalParams) ([]ListUsersPaginatedWithTotalRow, error) {
+	rows, err := q.db.QueryContext(ctx, listUsersPaginatedWithTotal, arg.Limit, arg.Offset, arg.Role)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUsersPaginatedWithTotalRow{}
+	for rows.Next() {
+		var i ListUsersPaginatedWithTotalRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
+			&i.PasswordHash,
+			&i.Role,
+			&i.Claims,
+			&i.OauthProvider,
+			&i.OauthID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.IsActive,
+			&i.Total,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateUserClaims = `-- name: UpdateUserClaims :exec
 UPDATE
     users

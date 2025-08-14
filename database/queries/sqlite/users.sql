@@ -157,6 +157,32 @@ FROM
 ORDER BY
     created_at DESC;
 
+-- name: ListUsersPaginatedWithTotal :many
+-- Retrieves users from database, paginated with limit and offset.
+-- Returns total with users, useful for api pagination.
+WITH filtered AS (
+    SELECT *
+    FROM users
+    WHERE (:role IS NULL OR role = :role)
+)
+SELECT
+    id,
+    email,
+    password_hash,
+    role,
+    claims,
+    oauth_provider,
+    oauth_id,
+    created_at,
+    updated_at,
+    is_active,
+    COUNT(*) OVER() AS total
+FROM
+    filtered
+ORDER BY
+    created_at DESC
+LIMIT ?1 OFFSET ?2;
+
 -- name: UpdateUserRoleAndClaims :exec
 -- Sets a user's role,JSON claims data and updates the 'updated_at' timestamp.
 -- Useful for keeping the root claim syncronized with the role

@@ -165,6 +165,11 @@ type Authstore interface {
 	// Skips users that cannot be parsed and collects transformation errors.
 	ListAllUsers(ctx context.Context) ([]*models.User, error)
 
+	// ListUsersPaginatedWithRoleFilter retrieves a paginated list of users from the database,
+	// optionally filtering by role. It also returns pagination metadata.
+	// If transformation errors occur, partial results are returned with joined errors.
+	ListUsersPaginatedWithRoleFilter(ctx context.Context, args models.GetPaginatedUsersParams) ([]*models.User, models.PaginationMeta, error)
+
 	// SoftDeleteUser marks a user as inactive (without deleting their data).
 	SoftDeleteUser(ctx context.Context, id uuid.UUID) error
 

@@ -6,13 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"time"
 
 	"github.com/Ryan-Har/groundgo/internal/db/sqliteDB"
 	"github.com/Ryan-Har/groundgo/internal/logutil"
 	"github.com/Ryan-Har/groundgo/pkg/models"
 	"github.com/Ryan-Har/groundgo/pkg/models/passwd"
-	"github.com/Ryan-Har/groundgo/pkg/models/transform"
 	"github.com/google/uuid"
 )
 
@@ -45,7 +45,7 @@ func (s *sqliteAuthStore) CreateUser(ctx context.Context, args models.CreateUser
 		)
 	}
 
-	params, err := transform.ToSQLiteCreateUserParams(args)
+	params, err := sqliteDB.CreateUserParamsFromModel(args)
 	if err != nil {
 		return nil, logutil.LogAndWrapErr(s.log, errMsg,
 			models.NewTransformationError(err.Error()),
@@ -60,7 +60,7 @@ func (s *sqliteAuthStore) CreateUser(ctx context.Context, args models.CreateUser
 			models.NewDatabaseError(err),
 		)
 	}
-	user, err := transform.FromSQLiteUser(sqlUser)
+	user, err := sqlUser.ToUserModel()
 	if err != nil {
 		return nil, logutil.LogAndWrapErr(s.log, errMsg,
 			models.NewTransformationError(err.Error()),
@@ -79,7 +79,7 @@ func (s *sqliteAuthStore) GetUserByEmail(ctx context.Context, email string) (*mo
 			models.NewDatabaseError(err),
 		)
 	}
-	user, err := transform.FromSQLiteUser(sqlUser)
+	user, err := sqlUser.ToUserModel()
 	if err != nil {
 		return nil, logutil.LogAndWrapErr(s.log, errMsg,
 			models.NewTransformationError(err.Error()),
@@ -104,7 +104,7 @@ func (s *sqliteAuthStore) GetUserByID(ctx context.Context, id uuid.UUID) (*model
 			models.NewDatabaseError(err),
 		)
 	}
-	user, err := transform.FromSQLiteUser(sqlUser)
+	user, err := sqlUser.ToUserModel()
 	if err != nil {
 		return nil, logutil.LogAndWrapErr(s.log, errMsg,
 			models.NewTransformationError(err.Error()),
@@ -124,7 +124,7 @@ func (s *sqliteAuthStore) GetUserByOAuth(ctx context.Context, args models.UserOA
 		)
 	}
 
-	params := transform.ToGetUserByOAuthParams(args)
+	params := sqliteDB.GetUserByOAuthParamsFromModel(args)
 
 	sqlUser, err := s.queries.GetUserByOAuth(ctx, params)
 	if err != nil {
@@ -133,7 +133,7 @@ func (s *sqliteAuthStore) GetUserByOAuth(ctx context.Context, args models.UserOA
 		)
 	}
 
-	user, err := transform.FromSQLiteUser(sqlUser)
+	user, err := sqlUser.ToUserModel()
 	if err != nil {
 		return nil, logutil.LogAndWrapErr(s.log, errMsg,
 			models.NewTransformationError(err.Error()),
@@ -158,7 +158,7 @@ func (s *sqliteAuthStore) ListAllUsers(ctx context.Context) ([]*models.User, err
 	var errs []error
 
 	for _, sqlUser := range sqlUsers {
-		user, err := transform.FromSQLiteUser(sqlUser)
+		user, err := sqlUser.ToUserModel()
 		if err != nil {
 			errs = append(errs, models.NewTransformationError(err.Error()))
 			continue
@@ -172,6 +172,68 @@ func (s *sqliteAuthStore) ListAllUsers(ctx context.Context) ([]*models.User, err
 	}
 
 	return users, nil
+}
+
+func (s *sqliteAuthStore) ListUsersPaginatedWithRoleFilter(ctx context.Context, args models.GetPaginatedUsersParams) ([]*models.User, models.PaginationMeta, error) {
+	defer logutil.NewTimingLogger(s.log, time.Now(), "executed sql query", "method", "ListUsersPaginatedWithRoleFilter")()
+	errMsg := "failed to list all users"
+
+	if args.Page < 1 {
+		args.Page = 1
+	}
+	if args.Limit < 1 {
+		args.Limit = 20
+	}
+
+	offset := int64((args.Page - 1) * args.Limit)
+
+	params := sqliteDB.ListUsersPaginatedWithTotalParams{
+		Limit:  int64(args.Limit),
+		Offset: offset,
+		Role:   args.Role,
+	}
+
+	pagData := models.PaginationMeta{
+		Limit:      args.Limit,
+		Page:       args.Page,
+		Total:      0,
+		TotalPages: 0,
+	}
+
+	pagUsers, err := s.queries.ListUsersPaginatedWithTotal(ctx, params)
+	if err != nil {
+		return nil, pagData, logutil.DebugAndWrapErr(s.log, errMsg,
+			models.NewDatabaseError(err),
+		)
+	}
+
+	// force NoRows error if there's no users
+	if len(pagUsers) == 0 {
+		return []*models.User{}, pagData, nil
+	}
+
+	// Get total from first row (all rows have the same total due to window function)
+	pagData.Total = int(pagUsers[0].Total)
+	pagData.TotalPages = int(math.Ceil(float64(pagData.Total) / float64(args.Limit)))
+
+	var errs []error
+	users := make([]*models.User, 0, len(pagUsers))
+
+	for _, pagUser := range pagUsers {
+		user, err := pagUser.ToUserModel()
+		if err != nil {
+			errs = append(errs, models.NewTransformationError(err.Error()))
+			continue
+		}
+		users = append(users, &user)
+	}
+
+	if len(errs) > 0 {
+		// Return partial results with joined transformation errors
+		return users, pagData, errors.Join(errs...)
+	}
+
+	return users, pagData, nil
 }
 
 func (s *sqliteAuthStore) SoftDeleteUser(ctx context.Context, id uuid.UUID) error {
@@ -258,7 +320,7 @@ func (s *sqliteAuthStore) UpdateUserRole(ctx context.Context, id uuid.UUID, role
 		)
 	}
 
-	userClaims, err := transform.ParseClaims(user.Claims)
+	userClaims, err := sqliteDB.ParseClaims(user.Claims)
 	if err != nil {
 		return logutil.LogAndWrapErr(s.log, errMsg,
 			models.NewTransformationError(err.Error()),
@@ -269,7 +331,7 @@ func (s *sqliteAuthStore) UpdateUserRole(ctx context.Context, id uuid.UUID, role
 	userClaims["/"] = role
 
 	// Marshal updated claims
-	claimsStr, err := transform.SerializeClaims(userClaims)
+	claimsStr, err := sqliteDB.SerializeClaims(userClaims)
 	if err != nil {
 		return logutil.LogAndWrapErr(s.log, errMsg,
 			models.NewTransformationError(err.Error()),
@@ -314,7 +376,7 @@ func (s *sqliteAuthStore) UpdateUserClaims(ctx context.Context, id uuid.UUID, cl
 		claims["/"] = models.Role(user.Role)
 	}
 
-	claimsStr, err := transform.SerializeClaims(claims)
+	claimsStr, err := sqliteDB.SerializeClaims(claims)
 	if err != nil {
 		return logutil.LogAndWrapErr(s.log, errMsg,
 			models.NewTransformationError(err.Error()),
