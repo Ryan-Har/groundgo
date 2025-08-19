@@ -183,11 +183,6 @@ func UpdateUserByIDParamsFromModel(args models.UpdateUserByIDParams) (UpdateUser
 		params.Role = (*string)(args.Role)
 	}
 
-	if args.Role != nil {
-        roleStr := string(*args.Role)
-        params.Role = &roleStr
-    }
-
 	return params, nil
 }
 
