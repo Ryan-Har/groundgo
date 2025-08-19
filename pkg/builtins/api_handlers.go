@@ -350,7 +350,6 @@ func (h *Handler) handleAPICreateUser() http.HandlerFunc {
 		var params models.CreateUserParams
 
 		if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
-			fmt.Println("ERROR DECODING: ", err)
 			api.ReturnError(w, h.log, api.BadRequestInvalidJSON)
 			return
 		}
@@ -391,4 +390,113 @@ func (h *Handler) handleAPICreateUser() http.HandlerFunc {
 
 		api.RespondJSONAndLog(w, h.log, http.StatusCreated, api.UserResponse{User: *user})
 	}
+}
+
+func (h *Handler) handleAPIUpdateUserByID() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
+
+		id := r.PathValue("id")
+		usrID, err := uuid.Parse(id)
+		if err != nil {
+			code, resp := api.BadRequestValidation("invalid uuid format in path")
+			api.RespondJSONAndLog(w, h.log, code, resp)
+			return
+		}
+
+		var params api.UserUpdateRequest
+
+		if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+			h.handleJSONDecodeError(w, err)
+			return
+		}
+
+		reqStruct := models.UpdateUserByIDParams{
+			ID:       usrID,
+			Email:    params.Email,
+			Claims:   params.Claims,
+			IsActive: params.IsActive,
+		}
+
+		user, err := h.auth.UpdateUserByID(r.Context(), reqStruct)
+		if err != nil {
+			h.handleAuthstoreError(w, err)
+			return
+		}
+
+		api.RespondJSONAndLog(w, h.log, http.StatusCreated, api.UserResponse{User: *user})
+	}
+}
+
+func (h *Handler) handleAPIDeleteUserByID() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
+
+		id := r.PathValue("id")
+		usrID, err := uuid.Parse(id)
+		if err != nil {
+			code, resp := api.BadRequestValidation("invalid uuid format in path")
+			api.RespondJSONAndLog(w, h.log, code, resp)
+			return
+		}
+
+		if err := h.auth.HardDeleteUser(r.Context(), usrID); err != nil {
+			h.handleAuthstoreError(w, err)
+			return
+		}
+
+		w.WriteHeader(http.StatusAccepted)
+	}
+}
+
+func (h *Handler) handleJSONDecodeError(w http.ResponseWriter, err error) {
+	var valErr *models.ValidationError
+	if errors.As(err, &valErr) {
+		code, resp := api.BadRequestValidation(valErr.Error())
+		api.RespondJSONAndLog(w, h.log, code, resp)
+		return
+	}
+
+	var tranErr *models.TransformationError
+	if errors.As(err, &tranErr) {
+		h.log.Error("failed to transform data when decoding json", "err", err)
+		api.ReturnError(w, h.log, api.InternalServerError)
+		return
+	}
+
+	api.ReturnError(w, h.log, api.BadRequestInvalidJSON)
+
+}
+
+func (h *Handler) handleAuthstoreError(w http.ResponseWriter, err error) {
+	var valErr *models.ValidationError
+	if errors.As(err, &valErr) {
+		code, resp := api.BadRequestValidation(err.Error())
+		api.RespondJSONAndLog(w, h.log, code, resp)
+		return
+	}
+	// specific db errors
+	var dupErr *db.DuplicateKeyError
+	if errors.As(err, &dupErr) {
+		code, resp := api.ResourceConflict(fmt.Sprintf("%s already exists", dupErr.GetField()))
+		api.RespondJSONAndLog(w, h.log, code, resp)
+		return
+	}
+	// catch-all db errprs
+	var dbErr *models.DatabaseError
+	if errors.As(err, &dbErr) {
+		h.log.Error("authstore error", "err", dbErr)
+		api.ReturnError(w, h.log, api.InternalServerError)
+		return
+	}
+
+	var tranErr *models.TransformationError
+	if errors.As(err, &tranErr) {
+		h.log.Error("transformation error", "err", tranErr)
+		api.ReturnError(w, h.log, api.InternalServerError)
+		return
+	}
+	// any other error
+	h.log.Debug("unknown authstore error", "err", err)
+	api.ReturnError(w, h.log, api.InternalServerError)
 }

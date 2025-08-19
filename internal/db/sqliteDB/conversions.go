@@ -2,6 +2,7 @@ package sqliteDB
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -150,6 +151,44 @@ func (s *Session) ToSessionModel() (models.Session, error) {
 
 	sesh.UserID = usrID
 	return sesh, nil
+}
+
+func UpdateUserByIDParamsFromModel(args models.UpdateUserByIDParams) (UpdateUserByIDParams, error) {
+	params := UpdateUserByIDParams{
+		Email:         args.Email,
+		OauthProvider: args.OauthProvider,
+		OauthID:       args.OauthID,
+		IsActive:      args.IsActive,
+	}
+
+	if args.ID == uuid.Nil {
+		return UpdateUserByIDParams{}, errors.New("provided id is nil")
+	}
+	params.ID = args.ID.String()
+
+	if args.Password != nil && !passwd.IsHashed(*args.Password) {
+		return UpdateUserByIDParams{}, errors.New("provided password is not yet hashed")
+	}
+	params.PasswordHash = args.Password
+
+	if args.Claims != nil {
+		claims, err := SerializeClaims(*args.Claims)
+		if err != nil {
+			return UpdateUserByIDParams{}, err
+		}
+		params.Claims = claims
+	}
+
+	if args.Role != nil {
+		params.Role = (*string)(args.Role)
+	}
+
+	if args.Role != nil {
+        roleStr := string(*args.Role)
+        params.Role = &roleStr
+    }
+
+	return params, nil
 }
 
 func SerializeClaims(claims models.Claims) (*string, error) {

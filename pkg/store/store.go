@@ -189,4 +189,7 @@ type Authstore interface {
 
 	// UpdateUserPassword securely hashes and stores a new password for the user.
 	UpdateUserPassword(ctx context.Context, id uuid.UUID, password string) error
+
+	// UpdateUserByID handles updating of a single user
+	UpdateUserByID(ctx context.Context, args models.UpdateUserByIDParams) (*models.User, error)
 }

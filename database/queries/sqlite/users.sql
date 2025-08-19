@@ -191,3 +191,29 @@ SET role = ?,
     claims = ?, 
     updated_at = STRFTIME('%s', 'NOW')
 WHERE id = ?;
+
+-- name: UpdateUserByID :one
+-- Updates any user's field using coalesce so that non updated fields remain  
+UPDATE users
+SET
+    email = COALESCE(sqlc.narg('email'), email),
+    password_hash = COALESCE(sqlc.narg('password_hash'), password_hash),
+    role = COALESCE(sqlc.narg('role'), role),
+    claims = COALESCE(sqlc.narg('claims'), claims),
+    oauth_provider = COALESCE(sqlc.narg('oauth_provider'), oauth_provider),
+    oauth_id = COALESCE(sqlc.narg('oauth_id'), oauth_id),
+    is_active = COALESCE(sqlc.narg('is_active'), is_active),
+    updated_at = STRFTIME('%s', 'NOW')
+WHERE id = sqlc.arg('id')
+RETURNING
+    id,
+    email,
+    password_hash,
+    role,
+    claims,
+    oauth_provider,
+    oauth_id,
+    created_at,
+    updated_at,
+    is_active;
+;

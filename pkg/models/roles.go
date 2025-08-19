@@ -78,7 +78,7 @@ func (r Role) String() string {
 func (r *Role) UnmarshalText(text []byte) error {
 	s := Role(strings.ToLower(string(text)))
 	if !s.IsValid() {
-		return fmt.Errorf("invalid role: %s", text)
+		return NewValidationError(fmt.Sprintf("invalid role: %s", text))
 	}
 	*r = s
 	return nil

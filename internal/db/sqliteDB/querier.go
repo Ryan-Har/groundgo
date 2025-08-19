@@ -88,6 +88,8 @@ type Querier interface {
 	RenewSession(ctx context.Context, arg RenewSessionParams) (Session, error)
 	// RevokeToken adds a token's JTI (JWT ID) to the revocation list.
 	RevokeToken(ctx context.Context, arg RevokeTokenParams) (RevokedToken, error)
+	// Updates any user's field using coalesce so that non updated fields remain
+	UpdateUserByID(ctx context.Context, arg UpdateUserByIDParams) (User, error)
 	// Updates a user's JSON claims data and updates the 'updated_at' timestamp.
 	UpdateUserClaims(ctx context.Context, arg UpdateUserClaimsParams) error
 	// Updates a user's active status (e.g., for deactivation) and updates the 'updated_at' timestamp.

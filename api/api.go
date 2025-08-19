@@ -70,3 +70,10 @@ type GetUsersResponse struct {
 	Users []models.User         `json:"users"`
 	Meta  models.PaginationMeta `json:"meta"`
 }
+
+type UserUpdateRequest struct {
+	Claims   *models.Claims `json:"claims,omitempty"`
+	Email    *string        `json:"email,omitempty"`
+	IsActive *bool          `json:"isActive,omitempty"`
+	Role     *models.Role   `json:"role,omitempty"`
+}

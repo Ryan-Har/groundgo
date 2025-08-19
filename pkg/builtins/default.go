@@ -95,9 +95,11 @@ func (b *Builtin) LoadDefaultAPIRoutes() error {
 		"POST /api/v1/login":        b.handler.handleAPILoginPost(),
 		"POST /api/v1/logout":       b.handler.handleAPILogoutPost(),
 		// users
-		"GET /api/v1/users/{id}": b.handler.handleAPIGetUserByID(),
-		"GET /api/v1/users":      b.handler.handleAPIGetUsers(),
-		"POST /api/v1/users":     b.handler.handleAPICreateUser(),
+		"GET /api/v1/users/{id}":    b.handler.handleAPIGetUserByID(),
+		"PATCH /api/v1/users/{id}":  b.handler.handleAPIUpdateUserByID(),
+		"DELETE /api/v1/users/{id}": b.handler.handleAPIDeleteUserByID(),
+		"GET /api/v1/users":         b.handler.handleAPIGetUsers(),
+		"POST /api/v1/users":        b.handler.handleAPICreateUser(),
 		//self
 		"GET /api/v1/users/me":                 b.handler.handleAPIGetOwnUser(),
 		"GET /api/v1/users/me/change-password": b.handler.HandleAPIChangeOwnPassword(),

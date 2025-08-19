@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -62,4 +63,39 @@ func (c Claims) AsSlice() []string {
 		claimsSlice = append(claimsSlice, fmt.Sprintf("%s:%s", resource, role.String()))
 	}
 	return claimsSlice
+}
+
+func (c *Claims) UnmarshalJSON(data []byte) error {
+	tmp := map[string]Role{}
+	if err := json.Unmarshal(data, &tmp); err != nil {
+		return err
+	}
+
+	for path, role := range tmp {
+		// Prevent the root path from being set
+		if path == "/" {
+			return NewValidationError("root path '/' cannot be populated in claims")
+		}
+
+		// Validate the role
+		if !role.IsValid() {
+			return NewValidationError(fmt.Sprintf("invalid role '%s' for path '%s'", role, path))
+		}
+	}
+
+	*c = tmp
+	return nil
+}
+
+func (c Claims) MarshalJSON() ([]byte, error) {
+	tmp := make(map[string]Role, len(c))
+
+	for path, role := range c {
+		if path == "/" {
+			continue // skip the root path
+		}
+		tmp[path] = role
+	}
+
+	return json.Marshal(tmp)
 }

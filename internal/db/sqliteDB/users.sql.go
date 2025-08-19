@@ -289,7 +289,7 @@ SELECT
     role,
     claims,
     oauth_provider,
-    oauth_id, 
+    oauth_id,
     created_at,
     updated_at,
     is_active,
@@ -356,6 +356,70 @@ func (q *Queries) ListUsersPaginatedWithTotal(ctx context.Context, arg ListUsers
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateUserByID = `-- name: UpdateUserByID :one
+UPDATE users
+SET
+    email = COALESCE(?1, email),
+    password_hash = COALESCE(?2, password_hash),
+    role = COALESCE(?3, role),
+    claims = COALESCE(?4, claims),
+    oauth_provider = COALESCE(?5, oauth_provider),
+    oauth_id = COALESCE(?6, oauth_id),
+    is_active = COALESCE(?7, is_active),
+    updated_at = STRFTIME('%s', 'NOW')
+WHERE id = ?8
+RETURNING
+    id,
+    email,
+    password_hash,
+    role,
+    claims,
+    oauth_provider,
+    oauth_id,
+    created_at,
+    updated_at,
+    is_active
+`
+
+type UpdateUserByIDParams struct {
+	Email         *string `json:"email"`
+	PasswordHash  *string `json:"passwordHash"`
+	Role          *string `json:"role"`
+	Claims        *string `json:"claims"`
+	OauthProvider *string `json:"oauthProvider"`
+	OauthID       *string `json:"oauthId"`
+	IsActive      *bool   `json:"isActive"`
+	ID            string  `json:"id"`
+}
+
+// Updates any user's field using coalesce so that non updated fields remain
+func (q *Queries) UpdateUserByID(ctx context.Context, arg UpdateUserByIDParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, updateUserByID,
+		arg.Email,
+		arg.PasswordHash,
+		arg.Role,
+		arg.Claims,
+		arg.OauthProvider,
+		arg.OauthID,
+		arg.IsActive,
+		arg.ID,
+	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Role,
+		&i.Claims,
+		&i.OauthProvider,
+		&i.OauthID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.IsActive,
+	)
+	return i, err
 }
 
 const updateUserClaims = `-- name: UpdateUserClaims :exec

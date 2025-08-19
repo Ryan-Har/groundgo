@@ -428,3 +428,34 @@ func (s *sqliteAuthStore) UpdateUserPassword(ctx context.Context, id uuid.UUID, 
 	}
 	return nil
 }
+
+func (s *sqliteAuthStore) UpdateUserByID(ctx context.Context, args models.UpdateUserByIDParams) (*models.User, error) {
+	defer logutil.NewTimingLogger(s.log, time.Now(), "executed sql query", "method", "UpdateUserByID", "ID", args.ID.String())()
+	errMsg := "failed to update user"
+
+	if err := args.Verify(); err != nil {
+		return nil, err
+	}
+
+	dbParams, err := sqliteDB.UpdateUserByIDParamsFromModel(args)
+	if err != nil {
+		return nil, logutil.LogAndWrapErr(s.log, errMsg,
+			models.NewTransformationError(err.Error()),
+		)
+	}
+
+	sqlUser, err := s.queries.UpdateUserByID(ctx, dbParams)
+	if err != nil {
+		return nil, logutil.DebugAndWrapErr(s.log, errMsg,
+			models.NewDatabaseError(err),
+		)
+	}
+
+	user, err := sqlUser.ToUserModel()
+	if err != nil {
+		return nil, logutil.LogAndWrapErr(s.log, errMsg,
+			models.NewTransformationError(err.Error()),
+		)
+	}
+	return &user, nil
+}
