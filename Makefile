@@ -36,7 +36,7 @@ run: generate ## Run the application
 	$(GO) run ./cmd/main.go
 
 .PHONY: generate
-generate: sqlc-generate templ-generate oapi-generate ## Generate all code (templ templates, etc.)
+generate: sqlc-generate templ-generate ## Generate all code (templ templates, etc.)
 
 .PHONY: templ-generate
 templ-generate: ## Generate code from templ templates
@@ -52,11 +52,6 @@ watch-templ: ## Watch templ files for changes and regenerate
 sqlc-generate: ## Generate code from sqlc templates
 	@echo "$(COLOR_BLUE)Generating sqlc code...$(COLOR_RESET)"
 	$(GO) tool sqlc generate --file database/sqlite_sqlc.yaml
-
-.PHONY: oapi-generate
-oapi-generate: ## Generate code from open api templates
-	@echo "$(COLOR_BLUE)Generating open api code...$(COLOR_RESET)"
-	$(GO) tool oapi-codegen -generate types -package gen api/openApi.yaml > pkg/api/gen/openapi.gen.go
 
 .PHONY: test
 test: ## Run tests
