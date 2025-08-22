@@ -65,7 +65,7 @@ func (e *Enforcer) Handle(route string, handler http.Handler) error {
 			}
 
 			// Otherwise: method not allowed
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			e.respondMethodNotAllowed(w, r)
 		}))
 	}
 

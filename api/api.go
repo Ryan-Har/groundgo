@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"net/mail"
 	"time"
 
 	"github.com/Ryan-Har/groundgo/pkg/models"
@@ -39,6 +40,19 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
+func (r *LoginRequest) Validate() error {
+	if r.Email == "" {
+		return models.NewValidationError("email is required")
+	}
+	if _, err := mail.ParseAddress(r.Email); err != nil {
+		return models.NewValidationError("email not in RFC 5322 format")
+	}
+	if r.Password == "" {
+		return models.NewValidationError("password is required")
+	}
+	return nil
+}
+
 // LoginResponse defines model for LoginResponse.
 type LoginResponse struct {
 	ExpiresIn    int         `json:"expiresIn"`
@@ -64,6 +78,16 @@ type UserResponse struct {
 type PasswordUpdateRequest struct {
 	CurrentPassword string `json:"currentPassword"`
 	NewPassword     string `json:"newPassword"`
+}
+
+func (r *PasswordUpdateRequest) Validate() error {
+	if r.CurrentPassword == "" {
+		return models.NewValidationError("current password is required")
+	}
+	if r.NewPassword == "" {
+		return models.NewValidationError("new password is required")
+	}
+	return nil
 }
 
 type GetUsersResponse struct {

@@ -7,17 +7,21 @@ import (
 )
 
 type Handler struct {
-	auth    store.Authstore
-	session store.Sessionstore
-	token   store.Tokenstore
-	log     *slog.Logger
+	auth         store.Authstore
+	session      store.Sessionstore
+	token        store.Tokenstore
+	log          *slog.Logger
+	apiBaseRoute string
+	baseRoute    string
 }
 
-func newHandler(logger *slog.Logger, auth store.Authstore, session store.Sessionstore, token store.Tokenstore) *Handler {
+func newHandler(logger *slog.Logger, auth store.Authstore, session store.Sessionstore, token store.Tokenstore, baseRotue, apiBaseRoute string) *Handler {
 	return &Handler{
-		auth:    auth,
-		session: session,
-		token:   token,
-		log:     logger,
+		auth:         auth,
+		session:      session,
+		token:        token,
+		log:          logger,
+		baseRoute:    baseRotue,
+		apiBaseRoute: apiBaseRoute,
 	}
 }

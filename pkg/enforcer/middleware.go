@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/Ryan-Har/groundgo/api"
 	"github.com/Ryan-Har/groundgo/internal/sessionstore"
 	"github.com/Ryan-Har/groundgo/pkg/models"
 	"github.com/google/uuid"
@@ -67,7 +68,11 @@ func (e *Enforcer) AuthenticationMiddleware(next http.Handler) http.Handler {
 		if !isAuthenticated {
 			user, err := e.createGuestSession(r, w)
 			if err != nil {
-				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				if isAPIRequest(r) {
+					api.ReturnError(w, e.log, api.InternalServerError)
+				} else {
+					http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				}
 				return
 			}
 			authUser = user
@@ -110,12 +115,14 @@ func (e *Enforcer) AuthorizationMiddleware(path string, required models.Role) fu
 			user, ok := r.Context().Value(UserContextKey).(*models.User)
 			if !ok {
 				e.log.Error("AuthorizationMiddleware expected User in http context and did not receive", "path", path)
-				http.Error(w, "Forbidden", http.StatusInternalServerError)
+				e.respondForbidden(w, r)
 				return
 			}
 
+			user.EnsureRootClaim()
+
 			if !user.Claims.HasAtLeast(path, required) {
-				http.Error(w, "Forbidden", http.StatusForbidden)
+				e.respondForbidden(w, r)
 				return
 			}
 
@@ -292,4 +299,34 @@ func (e *Enforcer) createGuestSession(r *http.Request, w http.ResponseWriter) (*
 	}
 
 	return user, nil
+}
+
+// isAPIRequest checks if a request is  an API request by checking that both an accept header exists with json
+// and the path contains "api" somewhere
+func isAPIRequest(r *http.Request) bool {
+	// Check if the request Accept header contains "json"
+	acceptHeader := r.Header.Get("Accept")
+	acceptsJSON := strings.Contains(acceptHeader, "json")
+
+	// Check if the URL path contains "api"
+	pathContainsAPI := strings.Contains(r.URL.Path, "api")
+
+	// Must satisfy both conditions
+	return acceptsJSON && pathContainsAPI
+}
+
+func (e *Enforcer) respondForbidden(w http.ResponseWriter, r *http.Request) {
+	if isAPIRequest(r) {
+		api.ReturnError(w, e.log, api.ForbiddenAccessDenied)
+	} else {
+		http.Error(w, "Forbidden", http.StatusInternalServerError)
+	}
+}
+
+func (e *Enforcer) respondMethodNotAllowed(w http.ResponseWriter, r *http.Request) {
+	if isAPIRequest(r) {
+		api.ReturnError(w, e.log, api.MethodNotAllowed)
+	} else {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
 }

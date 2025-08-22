@@ -1,6 +1,7 @@
 package models
 
 import (
+	"errors"
 	"fmt"
 	"net/mail"
 	"time"
@@ -16,6 +17,21 @@ type CreateUserParams struct {
 	Claims        Claims  `json:"claims"`
 	OauthProvider *string `json:"oauthProvider"`
 	OauthID       *string `json:"oauthId"`
+}
+
+func (c *CreateUserParams) Validate() error {
+
+	if c.Email == "" {
+		return NewValidationError("email is required")
+	}
+	if _, err := mail.ParseAddress(c.Email); err != nil {
+		return NewValidationError(fmt.Sprintf("email address %s is not a valid RFC 5322 format", c.Email))
+	}
+
+	if c.Password == nil {
+		return NewValidationError("password is required")
+	}
+	return nil
 }
 
 type User struct {
@@ -81,6 +97,16 @@ type GetPaginatedUsersParams struct {
 	Page  int   `json:"page"`
 	Limit int   `json:"limit"`
 	Role  *Role `json:"role"`
+}
+
+func (p *GetPaginatedUsersParams) Validate() error {
+	if p.Page < 1 {
+		return errors.New("page must be greater than 0")
+	}
+	if p.Limit > 100 || p.Limit < 1 {
+		return errors.New("limit must be between 1 and 100")
+	}
+	return nil
 }
 
 type PaginationMeta struct {

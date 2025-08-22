@@ -13,38 +13,40 @@ type ErrorKey string
 // You can have multiple variants under the same HTTP status code.
 // Example: both ErrInvalidJSON and ErrValidation map to HTTP 400.
 const (
-	ErrInvalidJSON  ErrorKey = "invalid_json"
-	ErrValidation   ErrorKey = "validation_failed"
-	ErrNotFound     ErrorKey = "not_found"
-	ErrInternal     ErrorKey = "internal_error"
-	ErrCredentials  ErrorKey = "invalid_credentials"
-	ErrAuthRequired ErrorKey = "auth_required"
-	ErrInvalidToken ErrorKey = "invalid_token"
-	ErrAccessDenied ErrorKey = "access_denied"
-	ErrConflict     ErrorKey = "conflict"
+	ErrInvalidJSON      ErrorKey = "invalid_json"
+	ErrValidation       ErrorKey = "validation_failed"
+	ErrNotFound         ErrorKey = "not_found"
+	ErrInternal         ErrorKey = "internal_error"
+	ErrCredentials      ErrorKey = "invalid_credentials"
+	ErrAuthRequired     ErrorKey = "auth_required"
+	ErrInvalidToken     ErrorKey = "invalid_token"
+	ErrAccessDenied     ErrorKey = "access_denied"
+	ErrConflict         ErrorKey = "conflict"
+	ErrMethodNotAllowed ErrorKey = "not_allowed"
 )
 
 // errorMessages is the centralized map of all standard error texts.
 // The key is an ErrorKey constant, and the value is the message shown
 // in the "error" field of the JSON response.
 var errorMessages = map[ErrorKey]string{
-	ErrInvalidJSON:  "invalid JSON format",
-	ErrValidation:   "validation failed",
-	ErrNotFound:     "resource not found",
-	ErrInternal:     "internal server error",
-	ErrCredentials:  "invalid credentials",
-	ErrAuthRequired: "authentication required",
-	ErrInvalidToken: "invalid token",
-	ErrAccessDenied: "access denied",
-	ErrConflict:     "resource conflict",
+	ErrInvalidJSON:      "invalid JSON format",
+	ErrValidation:       "validation failed",
+	ErrNotFound:         "resource not found",
+	ErrInternal:         "internal server error",
+	ErrCredentials:      "invalid credentials",
+	ErrAuthRequired:     "authentication required",
+	ErrInvalidToken:     "invalid token",
+	ErrAccessDenied:     "access denied",
+	ErrConflict:         "resource conflict",
+	ErrMethodNotAllowed: "method not allowed",
 }
 
 // ErrorResponse represents the JSON body returned for an error.
 // - Error:   short machine-readable summary of the problem
 // - Details: optional human-readable explanation (pointer so it can be nil)
 type ErrorResponse struct {
-	Details string `json:"details,omitempty"`
 	Error   string `json:"error"`
+	Details string `json:"details,omitempty"`
 }
 
 // NewError creates an ErrorResponse for a given HTTP status, error key, and details.
@@ -85,14 +87,18 @@ func InternalServerError() (int, ErrorResponse) {
 	return NewError(http.StatusInternalServerError, ErrInternal, "an unexpected error occurred")
 }
 
+func MethodNotAllowed() (int, ErrorResponse) {
+	return NewError(http.StatusMethodNotAllowed, ErrMethodNotAllowed, "")
+}
+
 // UnauthorizedInvalidCredentials returns a 401 error indicating incorrect login credentials.
 func UnauthorizedInvalidCredentials() (int, ErrorResponse) {
 	return NewError(http.StatusUnauthorized, ErrCredentials, "email or password is incorrect")
 }
 
-// UnauthorizedMissingToken returns a 401 error indicating that authentication token is required.
-func UnauthorizedMissingToken() (int, ErrorResponse) {
-	return NewError(http.StatusUnauthorized, ErrAuthRequired, "bearer token must be provided")
+// UnauthorizedMissingRefreshToken returns a 401 error indicating that refresh token is required.
+func UnauthorizedMissingRefreshToken() (int, ErrorResponse) {
+	return NewError(http.StatusUnauthorized, ErrAuthRequired, "refresh token cookie not found")
 }
 
 // UnauthorizedInvalidToken returns a 401 error indicating that the provided token is invalid or expired.

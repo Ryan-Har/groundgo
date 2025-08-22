@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/mail"
+	"strconv"
 	"time"
 
 	"github.com/Ryan-Har/groundgo/api"
@@ -50,7 +50,7 @@ func (h *Handler) handleAPITokenRefresh() http.HandlerFunc {
 		refreshTokenCookie, err := r.Cookie("refresh_token")
 		if err != nil {
 			if err == http.ErrNoCookie {
-				api.ReturnError(w, h.log, api.UnauthorizedMissingToken)
+				api.ReturnError(w, h.log, api.UnauthorizedMissingRefreshToken)
 				return
 			}
 			h.log.Error("failed to read cookie", "err", err)
@@ -80,7 +80,7 @@ func (h *Handler) handleAPITokenRefresh() http.HandlerFunc {
 			HttpOnly: true,
 			Secure:   false, // Set to true in production
 			//SameSite: http.SameSiteStrictMode,
-			Path: "/api/v1/token/refresh", // Only send it to the refresh endpoint
+			Path: h.apiBaseRoute + "/auth/refresh", // Only send it to the refresh endpoint
 		})
 
 		resp := api.TokenResponse{
@@ -99,6 +99,12 @@ func (h *Handler) handleAPILoginPost() http.HandlerFunc {
 
 		if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
 			api.ReturnError(w, h.log, api.BadRequestInvalidJSON)
+			return
+		}
+
+		if err := creds.Validate(); err != nil {
+			int, resp := api.BadRequestValidation(err.Error())
+			api.RespondJSONAndLog(w, h.log, int, resp)
 			return
 		}
 
@@ -129,7 +135,7 @@ func (h *Handler) handleAPILoginPost() http.HandlerFunc {
 			HttpOnly: true,
 			Secure:   false, // Set to true in production
 			//SameSite: http.SameSiteStrictMode,
-			Path: "/api/v1/token/refresh", // Only send it to the refresh endpoint
+			Path: h.apiBaseRoute + "/auth/refresh", // Only send it to the refresh endpoint
 		})
 
 		resp := api.TokenResponse{
@@ -174,7 +180,7 @@ func (h *Handler) handleAPILogoutPost() http.HandlerFunc {
 			HttpOnly: true,
 			Secure:   false, // Set to true in production
 			//SameSite: http.SameSiteStrictMode,
-			Path:    "/api/v1/token/refresh", // Only send it to the refresh endpoint
+			Path:    h.apiBaseRoute + "/auth/refresh", // Only send it to the refresh endpoint
 			Expires: time.Unix(0, 0),
 			MaxAge:  -1,
 		})
@@ -197,22 +203,7 @@ func (h *Handler) handleAPIGetUserByID() http.HandlerFunc {
 
 		user, err := h.auth.GetUserByID(r.Context(), usrID)
 		if err != nil {
-			var dbErr *models.DatabaseError
-			if errors.As(err, &dbErr) {
-				if errors.Is(dbErr, sql.ErrNoRows) {
-					code, resp := api.NotFound(fmt.Sprintf("user with id %s not found", usrID))
-					api.RespondJSONAndLog(w, h.log, code, resp)
-					return
-				}
-			}
-			var valErr *models.ValidationError
-			if errors.As(err, &valErr) {
-				code, resp := api.BadRequestValidation(valErr.Error())
-				api.RespondJSONAndLog(w, h.log, code, resp)
-				return
-			}
-
-			api.ReturnError(w, h.log, api.InternalServerError)
+			h.handleErrors(w, err)
 			return
 		}
 
@@ -274,6 +265,12 @@ func (h *Handler) HandleAPIChangeOwnPassword() http.HandlerFunc {
 			return
 		}
 
+		if err := puReq.Validate(); err != nil {
+			int, resp := api.BadRequestValidation(err.Error())
+			api.RespondJSONAndLog(w, h.log, int, resp)
+			return
+		}
+
 		if !passwd.Authenticate(puReq.CurrentPassword, *user.PasswordHash) {
 			api.ReturnError(w, h.log, api.UnauthorizedInvalidCredentials)
 			return
@@ -294,20 +291,51 @@ func (h *Handler) handleAPIGetUsers() http.HandlerFunc {
 		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 
 		var params models.GetPaginatedUsersParams
+		q := r.URL.Query()
 
-		if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
-			api.ReturnError(w, h.log, api.BadRequestInvalidJSON)
-			return
-		}
-
-		if params.Page < 1 {
-			code, resp := api.BadRequestValidation("page must be greater than 0")
+		// page required
+		pageStr := q.Get("page")
+		if pageStr == "" {
+			code, resp := api.BadRequestValidation("page parameter is required")
 			api.RespondJSONAndLog(w, h.log, code, resp)
 			return
 		}
+		page, err := strconv.Atoi(pageStr)
+		if err != nil {
+			code, resp := api.BadRequestValidation(fmt.Sprintf("invalid page: %s", pageStr))
+			api.RespondJSONAndLog(w, h.log, code, resp)
+			return
+		}
+		params.Page = page
 
-		if params.Limit > 100 || params.Limit < 1 {
-			code, resp := api.BadRequestValidation("limit must be between 1 and 100")
+		//limit required
+		limitStr := q.Get("limit")
+		if limitStr == "" {
+			code, resp := api.BadRequestValidation("limit parameter is required")
+			api.RespondJSONAndLog(w, h.log, code, resp)
+			return
+		}
+		limit, err := strconv.Atoi(limitStr)
+		if err != nil {
+			code, resp := api.BadRequestValidation(fmt.Sprintf("invalid limit: %s", pageStr))
+			api.RespondJSONAndLog(w, h.log, code, resp)
+			return
+
+		}
+		params.Limit = limit
+
+		// role optional, uses unmarshalText
+		if roleStr := q.Get("role"); roleStr != "" {
+			var role models.Role
+			if err := role.UnmarshalText([]byte(roleStr)); err != nil {
+				h.handleJSONDecodeError(w, err)
+				return
+			}
+			params.Role = &role
+		}
+
+		if err := params.Validate(); err != nil {
+			code, resp := api.BadRequestValidation(err.Error())
 			api.RespondJSONAndLog(w, h.log, code, resp)
 			return
 		}
@@ -350,41 +378,18 @@ func (h *Handler) handleAPICreateUser() http.HandlerFunc {
 		var params models.CreateUserParams
 
 		if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
-			api.ReturnError(w, h.log, api.BadRequestInvalidJSON)
+			h.handleJSONDecodeError(w, err)
 			return
 		}
 
-		emailAddr, err := mail.ParseAddress(params.Email)
-		if err != nil {
-			code, resp := api.BadRequestValidation(fmt.Sprintf("provided email address %s is not a valid RFC 5322 format", emailAddr))
-			api.RespondJSONAndLog(w, h.log, code, resp)
-			return
-		}
-
-		params.Email = emailAddr.Address
-
-		if params.Password == nil {
-			code, resp := api.BadRequestValidation("please provide a password")
-			api.RespondJSONAndLog(w, h.log, code, resp)
+		if err := params.Validate(); err != nil {
+			h.handleErrors(w, err)
 			return
 		}
 
 		user, err := h.auth.CreateUser(r.Context(), params)
 		if err != nil {
-			var valErr *models.ValidationError
-			if errors.As(err, &valErr) {
-				code, resp := api.BadRequestValidation(valErr.Error())
-				api.RespondJSONAndLog(w, h.log, code, resp)
-				return
-			}
-
-			var dupErr *db.DuplicateKeyError
-			if errors.As(err, &dupErr) {
-				code, resp := api.ResourceConflict(fmt.Sprintf("%s already exists", dupErr.GetField()))
-				api.RespondJSONAndLog(w, h.log, code, resp)
-				return
-			}
-			api.ReturnError(w, h.log, api.InternalServerError)
+			h.handleErrors(w, err)
 			return
 		}
 
@@ -411,16 +416,18 @@ func (h *Handler) handleAPIUpdateUserByID() http.HandlerFunc {
 			return
 		}
 
+		// no need to validate the request here, it's done at the store level when updating user
 		reqStruct := models.UpdateUserByIDParams{
 			ID:       usrID,
 			Email:    params.Email,
 			Claims:   params.Claims,
 			IsActive: params.IsActive,
+			Role:     params.Role,
 		}
 
 		user, err := h.auth.UpdateUserByID(r.Context(), reqStruct)
 		if err != nil {
-			h.handleAuthstoreError(w, err)
+			h.handleErrors(w, err)
 			return
 		}
 
@@ -441,7 +448,7 @@ func (h *Handler) handleAPIDeleteUserByID() http.HandlerFunc {
 		}
 
 		if err := h.auth.HardDeleteUser(r.Context(), usrID); err != nil {
-			h.handleAuthstoreError(w, err)
+			h.handleErrors(w, err)
 			return
 		}
 
@@ -468,7 +475,7 @@ func (h *Handler) handleJSONDecodeError(w http.ResponseWriter, err error) {
 
 }
 
-func (h *Handler) handleAuthstoreError(w http.ResponseWriter, err error) {
+func (h *Handler) handleErrors(w http.ResponseWriter, err error) {
 	var valErr *models.ValidationError
 	if errors.As(err, &valErr) {
 		code, resp := api.BadRequestValidation(err.Error())
@@ -482,9 +489,15 @@ func (h *Handler) handleAuthstoreError(w http.ResponseWriter, err error) {
 		api.RespondJSONAndLog(w, h.log, code, resp)
 		return
 	}
-	// catch-all db errprs
+	// catch-all db errors
 	var dbErr *models.DatabaseError
 	if errors.As(err, &dbErr) {
+		if errors.Is(err, sql.ErrNoRows) {
+			code, resp := api.NotFound("user with specified ID not found")
+			api.RespondJSONAndLog(w, h.log, code, resp)
+			return
+		}
+
 		h.log.Error("authstore error", "err", dbErr)
 		api.ReturnError(w, h.log, api.InternalServerError)
 		return
