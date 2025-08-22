@@ -90,17 +90,6 @@ type Querier interface {
 	RevokeToken(ctx context.Context, arg RevokeTokenParams) (RevokedToken, error)
 	// Updates any user's field using coalesce so that non updated fields remain
 	UpdateUserByID(ctx context.Context, arg UpdateUserByIDParams) (User, error)
-	// Updates a user's JSON claims data and updates the 'updated_at' timestamp.
-	UpdateUserClaims(ctx context.Context, arg UpdateUserClaimsParams) error
-	// Updates a user's active status (e.g., for deactivation) and updates the 'updated_at' timestamp.
-	UpdateUserIsActive(ctx context.Context, arg UpdateUserIsActiveParams) error
-	// Updates a user's password hash and updates the 'updated_at' timestamp.
-	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
-	// Updates a user's role and updates the 'updated_at' timestamp.
-	UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) error
-	// Sets a user's role,JSON claims data and updates the 'updated_at' timestamp.
-	// Useful for keeping the root claim syncronized with the role
-	UpdateUserRoleAndClaims(ctx context.Context, arg UpdateUserRoleAndClaimsParams) error
 }
 
 var _ Querier = (*Queries)(nil)

@@ -32,6 +32,7 @@ func (u *User) ToUserModel() (models.User, error) {
 	if err != nil {
 		return models.User{}, err
 	}
+	usrClaims["/"] = usr.Role
 	usr.ID = usrID
 	usr.Claims = usrClaims
 	return usr, nil
@@ -58,6 +59,7 @@ func (u *ListUsersPaginatedWithTotalRow) ToUserModel() (models.User, error) {
 	if err != nil {
 		return models.User{}, err
 	}
+	usrClaims["/"] = usr.Role
 	usr.ID = usrID
 	usr.Claims = usrClaims
 	return usr, nil

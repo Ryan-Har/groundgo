@@ -57,6 +57,11 @@ func (u *UpdateUserByIDParams) Verify() error {
 		}
 	}
 
+	// remove any root claims that may exist, The root claim is effectively the role.
+	if u.Claims != nil {
+		delete(*u.Claims, "/")
+	}
+
 	if u.Password != nil {
 		hashed, err := passwd.HashPassword(*u.Password)
 		if err != nil {

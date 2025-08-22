@@ -13,7 +13,6 @@ import (
 	"github.com/Ryan-Har/groundgo/internal/db/sqliteDB"
 	"github.com/Ryan-Har/groundgo/internal/logutil"
 	"github.com/Ryan-Har/groundgo/pkg/models"
-	"github.com/Ryan-Har/groundgo/pkg/models/passwd"
 	"github.com/google/uuid"
 )
 
@@ -239,48 +238,30 @@ func (s *sqliteAuthStore) ListUsersPaginatedWithRoleFilter(ctx context.Context, 
 
 func (s *sqliteAuthStore) SoftDeleteUser(ctx context.Context, id uuid.UUID) error {
 	defer logutil.NewTimingLogger(s.log, time.Now(), "executed sql query", "method", "SoftDeleteUser", "ID", id.String())()
-	errMsg := "failed to soft delete user"
+	active := false
 
-	if id == uuid.Nil {
-		return logutil.DebugAndWrapErr(s.log, errMsg,
-			models.NewValidationError("id not set"),
-		)
+	updateUser := models.UpdateUserByIDParams{
+		ID:       id,
+		IsActive: &active,
 	}
 
-	err := s.queries.UpdateUserIsActive(ctx, sqliteDB.UpdateUserIsActiveParams{
-		ID:       id.String(),
-		IsActive: false,
-	})
+	_, err := s.UpdateUserByID(ctx, updateUser)
 
-	if err != nil {
-		return logutil.DebugAndWrapErr(s.log, errMsg,
-			models.NewDatabaseError(err),
-		)
-	}
-	return nil
+	return err
 }
 
 func (s *sqliteAuthStore) RestoreUser(ctx context.Context, id uuid.UUID) error {
 	defer logutil.NewTimingLogger(s.log, time.Now(), "executed sql query", "method", "RestoreUser", "ID", id.String())()
-	errMsg := "failed to restore user"
+	active := true
 
-	if id == uuid.Nil {
-		return logutil.DebugAndWrapErr(s.log, errMsg,
-			models.NewValidationError("id not set"),
-		)
+	updateUser := models.UpdateUserByIDParams{
+		ID:       id,
+		IsActive: &active,
 	}
 
-	err := s.queries.UpdateUserIsActive(ctx, sqliteDB.UpdateUserIsActiveParams{
-		ID:       id.String(),
-		IsActive: true,
-	})
+	_, err := s.UpdateUserByID(ctx, updateUser)
 
-	if err != nil {
-		return logutil.DebugAndWrapErr(s.log, errMsg,
-			models.NewDatabaseError(err),
-		)
-	}
-	return nil
+	return err
 }
 
 func (s *sqliteAuthStore) HardDeleteUser(ctx context.Context, id uuid.UUID) error {
@@ -303,130 +284,43 @@ func (s *sqliteAuthStore) HardDeleteUser(ctx context.Context, id uuid.UUID) erro
 	return nil
 }
 
-// TODO
 func (s *sqliteAuthStore) UpdateUserRole(ctx context.Context, id uuid.UUID, role models.Role) error {
 	defer logutil.NewTimingLogger(s.log, time.Now(), "executed sql query", "method", "UpdateUserRole", "ID", id.String())()
-	errMsg := "failed to update user role"
 
-	if id == uuid.Nil {
-		return logutil.DebugAndWrapErr(s.log, errMsg,
-			models.NewValidationError("id not set"),
-		)
+	updateUser := models.UpdateUserByIDParams{
+		ID:   id,
+		Role: &role,
 	}
 
-	user, err := s.queries.GetUserByID(ctx, id.String())
-	if err != nil {
-		return logutil.DebugAndWrapErr(s.log, errMsg,
-			models.NewDatabaseError(err),
-		)
-	}
+	_, err := s.UpdateUserByID(ctx, updateUser)
 
-	userClaims, err := sqliteDB.ParseClaims(user.Claims)
-	if err != nil {
-		return logutil.LogAndWrapErr(s.log, errMsg,
-			models.NewTransformationError(err.Error()),
-		)
-	}
-
-	// Update the root claim ("/") to match the new role
-	userClaims["/"] = role
-
-	// Marshal updated claims
-	claimsStr, err := sqliteDB.SerializeClaims(userClaims)
-	if err != nil {
-		return logutil.LogAndWrapErr(s.log, errMsg,
-			models.NewTransformationError(err.Error()),
-		)
-	}
-
-	// Update the user's role and claims
-	err = s.queries.UpdateUserRoleAndClaims(ctx, sqliteDB.UpdateUserRoleAndClaimsParams{
-		ID:     id.String(),
-		Role:   role.String(),
-		Claims: claimsStr,
-	})
-	if err != nil {
-		return logutil.DebugAndWrapErr(s.log, errMsg,
-			models.NewDatabaseError(err),
-		)
-	}
-
-	return nil
+	return err
 }
 
 func (s *sqliteAuthStore) UpdateUserClaims(ctx context.Context, id uuid.UUID, claims models.Claims) error {
 	defer logutil.NewTimingLogger(s.log, time.Now(), "executed sql query", "method", "UpdateUserClaims", "ID", id.String())()
-	errMsg := "failed to update user claims"
 
-	if id == uuid.Nil {
-		return logutil.DebugAndWrapErr(s.log, errMsg,
-			models.NewValidationError("id not set"),
-		)
+	updateUser := models.UpdateUserByIDParams{
+		ID:     id,
+		Claims: &claims,
 	}
 
-	user, err := s.queries.GetUserByID(ctx, id.String())
-	if err != nil {
-		return logutil.DebugAndWrapErr(s.log, errMsg,
-			models.NewDatabaseError(err),
-		)
-	}
+	_, err := s.UpdateUserByID(ctx, updateUser)
 
-	// role must be updated if the root claim is. If not, the root claim should be added to allow for role based access
-	_, exists := claims["/"]
-	if !exists {
-		claims["/"] = models.Role(user.Role)
-	}
-
-	claimsStr, err := sqliteDB.SerializeClaims(claims)
-	if err != nil {
-		return logutil.LogAndWrapErr(s.log, errMsg,
-			models.NewTransformationError(err.Error()),
-		)
-	}
-
-	// Update the user's role and claims
-	err = s.queries.UpdateUserRoleAndClaims(ctx, sqliteDB.UpdateUserRoleAndClaimsParams{
-		ID:     id.String(),
-		Role:   claims["/"].String(),
-		Claims: claimsStr,
-	})
-
-	if err != nil {
-		return logutil.DebugAndWrapErr(s.log, errMsg,
-			models.NewDatabaseError(err),
-		)
-	}
-
-	return nil
+	return err
 }
 
 func (s *sqliteAuthStore) UpdateUserPassword(ctx context.Context, id uuid.UUID, password string) error {
 	defer logutil.NewTimingLogger(s.log, time.Now(), "executed sql query", "method", "UpdateUserPassword", "ID", id.String())()
-	errMsg := "failed to update user password"
 
-	if id == uuid.Nil {
-		return logutil.DebugAndWrapErr(s.log, errMsg,
-			models.NewValidationError("id not set"),
-		)
+	updateUser := models.UpdateUserByIDParams{
+		ID:       id,
+		Password: &password,
 	}
 
-	hashed, err := passwd.HashPassword(password)
-	if err != nil {
-		return logutil.LogAndWrapErr(s.log, errMsg,
-			models.NewTransformationError(err.Error()),
-		)
-	}
+	_, err := s.UpdateUserByID(ctx, updateUser)
 
-	err = s.queries.UpdateUserPassword(ctx, sqliteDB.UpdateUserPasswordParams{
-		ID:           id.String(),
-		PasswordHash: &hashed,
-	})
-	if err != nil {
-		return logutil.DebugAndWrapErr(s.log, errMsg,
-			models.NewDatabaseError(err),
-		)
-	}
-	return nil
+	return err
 }
 
 func (s *sqliteAuthStore) UpdateUserByID(ctx context.Context, args models.UpdateUserByIDParams) (*models.User, error) {
