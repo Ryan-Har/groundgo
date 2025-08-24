@@ -3,32 +3,32 @@ package groundgo
 import (
 	"database/sql"
 	"fmt"
+	"log/slog"
 
-	"github.com/Ryan-Har/groundgo/pkg/access"
-	"github.com/Ryan-Har/groundgo/pkg/services"
-	"github.com/go-logr/logr"
+	"github.com/Ryan-Har/groundgo/pkg/builtins"
+	"github.com/Ryan-Har/groundgo/pkg/enforcer"
+	"github.com/Ryan-Har/groundgo/pkg/store"
 )
 
 type GroundGo struct {
-	logger   logr.Logger
+	logger   *slog.Logger
 	config   *Config
-	Services *services.Services
-	Enforcer *access.Enforcer
+	Store    *store.Store
+	Enforcer *enforcer.Enforcer
+	Builtin  *builtins.Builtin
 
 	// Hold information to initialize services after configuration
 	db               *sql.DB
-	dbType           services.DBType
-	router           access.Router
+	dbType           store.DBType
+	router           enforcer.Router
 	sessionsInMemory bool // detertmines if the session store is held in memory only
 }
 
 type Option func(*GroundGo)
 
-func WithLogger(l logr.Logger) Option {
+func WithLogger(l *slog.Logger) Option {
 	return func(g *GroundGo) {
-		// Only set the logger if it's not a no-op logger, allowing for explicit Discard()
-		// or if the current logger is Discard() (the default)
-		if l.GetSink() != nil || g.logger.GetSink() == nil {
+		if l != nil {
 			g.logger = l
 		}
 	}
@@ -37,11 +37,11 @@ func WithLogger(l logr.Logger) Option {
 func WithSqliteDB(db *sql.DB) Option {
 	return func(g *GroundGo) {
 		g.db = db
-		g.dbType = services.DBTypeSQLite
+		g.dbType = store.DBTypeSQLite
 	}
 }
 
-func WithRouter(r access.Router) Option {
+func WithRouter(r enforcer.Router) Option {
 	return func(g *GroundGo) {
 		g.router = r
 	}
@@ -54,34 +54,36 @@ func WithInMemorySessionStore() Option {
 }
 
 func New(opts ...Option) (*GroundGo, error) {
-	gg := &GroundGo{
-		logger: logr.Discard(), // default to no-op logger
-	}
+	gg := &GroundGo{}
 
 	for _, opt := range opts {
 		opt(gg)
 	}
 
-	gg.logger.V(0).Info("starting groundgo")
-
-	// load services now that logging is set
-	gg.logger.V(0).Info("attempting to load services")
-	gg.Services = services.New(gg.db, gg.dbType, gg.logger, gg.sessionsInMemory)
-
-	// load enforcer
-	gg.logger.V(0).Info("attempting to load enforcer")
-	gg.Enforcer = access.NewEnforcer(gg.logger, gg.router, gg.Services.Auth, gg.Services.Session)
+	gg.logger.Info("starting groundgo")
 
 	// check if database is pingable
-	gg.logger.V(0).Info("attempting ping of database")
 	if err := gg.db.Ping(); err != nil {
 		return nil, fmt.Errorf("unable to ping database: %w", err)
 	}
+	gg.logger.Info("successfully connected to database")
 
-	if err := gg.Services.Auth.RunMigrations(); err != nil {
-		return nil, fmt.Errorf("unable to run migrations: %w", err)
+	// load stores now that logging is set
+	stores, err := store.New(gg.db, gg.dbType, gg.logger, gg.sessionsInMemory)
+	if err != nil {
+		return nil, err
 	}
+	gg.logger.Info("groundgo stores loaded")
+	gg.Store = stores
 
+	// load enforcer
+	gg.Enforcer = enforcer.NewEnforcer(gg.logger, gg.router, gg.Store.Auth, gg.Store.Session, gg.Store.Token)
+	gg.logger.Info("groundgo enforcer loaded")
+
+	gg.Builtin = builtins.New(gg.logger, gg.Enforcer, gg.Store.Auth, gg.Store.Session, gg.Store.Token)
+	gg.logger.Info("groundgo builtins loaded")
+
+	gg.logger.Info("groundgo enforcer loaded")
 	return gg, nil
 }
 

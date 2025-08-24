@@ -12,11 +12,52 @@ type Querier interface {
 	// Checks if an email address already exists in the database.
 	// Returns a count (0 or 1).
 	CheckEmailExists(ctx context.Context, email string) (int64, error)
+	// CreateAuditLog inserts a new security event into the audit trail.
+	CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) (AuthAuditLog, error)
+	// --
+	// ## Refresh Token Queries
+	//
+	// This file defines the SQLC queries for managing user refresh tokens.
+	// A refresh token is a long-lived credential used to obtain a new access token.
+	// For security, we only store a SHA-256 hash of the token in the database.
+	// --
+	// Inserts a new refresh token record into the database. It returns the newly
+	// created record.
+	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
+	// CreateSession creates a new session record for a user.
+	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
 	// Inserts a new user into the database.
 	// Returns the newly created user's ID.
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	// DeleteExpiredRefreshTokens purges tokens from the refresh list
+	// after they would have naturally expired. This keeps the table clean.
+	DeleteExpiredRefreshTokens(ctx context.Context) error
+	// DeleteExpiredRevokedTokens purges tokens from the revocation list
+	// after they would have naturally expired. This keeps the table clean.
+	DeleteExpiredRevokedTokens(ctx context.Context) error
+	// DeleteExpiredSessions purges all session records that have passed their expiration time.
+	// This should be run periodically by a background job.
+	DeleteExpiredSessions(ctx context.Context) error
+	// Deletes a refresh token by its unique primary key (id). This is the most
+	// efficient way to delete a token after it has been successfully used for rotation.
+	DeleteRefreshTokenByID(ctx context.Context, id string) error
+	// DeleteSession removes a specific session, effectively logging the user out.
+	DeleteSession(ctx context.Context, id string) error
+	// DeleteSessionsByUserID removes all active sessions for a given user.
+	// This is useful for "log out from all other devices" functionality.
+	DeleteSessionsByUserID(ctx context.Context, userID string) error
 	// Deletes a user from the database by their ID.
 	DeleteUser(ctx context.Context, id string) error
+	// Deletes all refresh tokens associated with a specific user ID. This is a crucial
+	// security measure to invalidate all sessions for a user if a compromised token
+	// is detected or if they request a "log out from all devices" action.
+	DeleteUserRefreshTokens(ctx context.Context, userID string) error
+	// Retrieves a single refresh token by its SHA-256 hash. This is the primary
+	// method for looking up a token when a user tries to refresh their session.
+	GetRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error)
+	// GetSession retrieves a single, active session by its ID.
+	// It will not return a session if it has expired.
+	GetSession(ctx context.Context, id string) (Session, error)
 	// Retrieves a user by their email address.
 	// Used for login and checking existing registrations.
 	GetUserByEmail(ctx context.Context, email string) (User, error)
@@ -26,20 +67,29 @@ type Querier interface {
 	// Retrieves a user by their OAuth provider and OAuth ID.
 	// Used for logging in users who registered via an OAuth provider.
 	GetUserByOAuth(ctx context.Context, arg GetUserByOAuthParams) (User, error)
+	// IsTokenRevoked checks if a token's JTI exists in the revocation list.
+	// sqlc will generate a method that returns a boolean.
+	IsTokenRevoked(ctx context.Context, id string) (int64, error)
 	// Retrieves all users from the database.
 	// Useful for administrative purposes (e.g., user management panel).
 	ListAllUsers(ctx context.Context) ([]User, error)
-	// Updates a user's JSON claims data and updates the 'updated_at' timestamp.
-	UpdateUserClaims(ctx context.Context, arg UpdateUserClaimsParams) error
-	// Updates a user's active status (e.g., for deactivation) and updates the 'updated_at' timestamp.
-	UpdateUserIsActive(ctx context.Context, arg UpdateUserIsActiveParams) error
-	// Updates a user's password hash and updates the 'updated_at' timestamp.
-	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
-	// Updates a user's role and updates the 'updated_at' timestamp.
-	UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) error
-	// Sets a user's role,JSON claims data and updates the 'updated_at' timestamp.
-	// Useful for keeping the root claim syncronized with the role
-	UpdateUserRoleAndClaims(ctx context.Context, arg UpdateUserRoleAndClaimsParams) error
+	// ListAuditLogsByEventType retrieves a paginated list of audit events of a specific type,
+	// ordered from newest to oldest.
+	ListAuditLogsByEventType(ctx context.Context, arg ListAuditLogsByEventTypeParams) ([]AuthAuditLog, error)
+	// ListAuditLogsForUser retrieves a paginated list of audit events for a specific user,
+	// ordered from newest to oldest.
+	ListAuditLogsForUser(ctx context.Context, arg ListAuditLogsForUserParams) ([]AuthAuditLog, error)
+	// Retrieves users from database, paginated with limit and offset.
+	// Returns total with users, useful for api pagination.
+	ListUsersPaginatedWithTotal(ctx context.Context, arg ListUsersPaginatedWithTotalParams) ([]ListUsersPaginatedWithTotalRow, error)
+	// RenewSession updates the expiration time of an active session.
+	// It only updates if the session has not already expired.
+	// Returns the updated session record, or no row if session is expired or missing.
+	RenewSession(ctx context.Context, arg RenewSessionParams) (Session, error)
+	// RevokeToken adds a token's JTI (JWT ID) to the revocation list.
+	RevokeToken(ctx context.Context, arg RevokeTokenParams) (RevokedToken, error)
+	// Updates any user's field using coalesce so that non updated fields remain
+	UpdateUserByID(ctx context.Context, arg UpdateUserByIDParams) (User, error)
 }
 
 var _ Querier = (*Queries)(nil)

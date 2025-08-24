@@ -276,107 +276,148 @@ func (q *Queries) ListAllUsers(ctx context.Context) ([]User, error) {
 	return items, nil
 }
 
-const updateUserClaims = `-- name: UpdateUserClaims :exec
-UPDATE
-    users
-SET
-    claims = ?,
-    updated_at = STRFTIME('%s', 'NOW')
-WHERE
-    id = ?
+const listUsersPaginatedWithTotal = `-- name: ListUsersPaginatedWithTotal :many
+WITH filtered AS (
+    SELECT id, email, password_hash, role, claims, oauth_provider, oauth_id, created_at, updated_at, is_active
+    FROM users
+    WHERE (?3 IS NULL OR role = ?3)
+)
+SELECT
+    id,
+    email,
+    password_hash,
+    role,
+    claims,
+    oauth_provider,
+    oauth_id,
+    created_at,
+    updated_at,
+    is_active,
+    COUNT(*) OVER() AS total
+FROM
+    filtered
+ORDER BY
+    created_at DESC
+LIMIT ?1 OFFSET ?2
 `
 
-type UpdateUserClaimsParams struct {
-	Claims *string `json:"claims"`
-	ID     string  `json:"id"`
+type ListUsersPaginatedWithTotalParams struct {
+	Limit  int64       `json:"limit"`
+	Offset int64       `json:"offset"`
+	Role   interface{} `json:"role"`
 }
 
-// Updates a user's JSON claims data and updates the 'updated_at' timestamp.
-func (q *Queries) UpdateUserClaims(ctx context.Context, arg UpdateUserClaimsParams) error {
-	_, err := q.db.ExecContext(ctx, updateUserClaims, arg.Claims, arg.ID)
-	return err
+type ListUsersPaginatedWithTotalRow struct {
+	ID            string  `json:"id"`
+	Email         string  `json:"email"`
+	PasswordHash  *string `json:"passwordHash"`
+	Role          string  `json:"role"`
+	Claims        *string `json:"claims"`
+	OauthProvider *string `json:"oauthProvider"`
+	OauthID       *string `json:"oauthId"`
+	CreatedAt     int64   `json:"createdAt"`
+	UpdatedAt     int64   `json:"updatedAt"`
+	IsActive      bool    `json:"isActive"`
+	Total         int64   `json:"total"`
 }
 
-const updateUserIsActive = `-- name: UpdateUserIsActive :exec
-UPDATE
-    users
-SET
-    is_active = ?,
-    updated_at = STRFTIME('%s', 'NOW')
-WHERE
-    id = ?
-`
-
-type UpdateUserIsActiveParams struct {
-	IsActive bool   `json:"isActive"`
-	ID       string `json:"id"`
+// Retrieves users from database, paginated with limit and offset.
+// Returns total with users, useful for api pagination.
+func (q *Queries) ListUsersPaginatedWithTotal(ctx context.Context, arg ListUsersPaginatedWithTotalParams) ([]ListUsersPaginatedWithTotalRow, error) {
+	rows, err := q.db.QueryContext(ctx, listUsersPaginatedWithTotal, arg.Limit, arg.Offset, arg.Role)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUsersPaginatedWithTotalRow{}
+	for rows.Next() {
+		var i ListUsersPaginatedWithTotalRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
+			&i.PasswordHash,
+			&i.Role,
+			&i.Claims,
+			&i.OauthProvider,
+			&i.OauthID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.IsActive,
+			&i.Total,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
-// Updates a user's active status (e.g., for deactivation) and updates the 'updated_at' timestamp.
-func (q *Queries) UpdateUserIsActive(ctx context.Context, arg UpdateUserIsActiveParams) error {
-	_, err := q.db.ExecContext(ctx, updateUserIsActive, arg.IsActive, arg.ID)
-	return err
-}
-
-const updateUserPassword = `-- name: UpdateUserPassword :exec
-UPDATE
-    users
-SET
-    password_hash = ?,
-    updated_at = STRFTIME('%s', 'NOW')
-WHERE
-    id = ?
-`
-
-type UpdateUserPasswordParams struct {
-	PasswordHash *string `json:"passwordHash"`
-	ID           string  `json:"id"`
-}
-
-// Updates a user's password hash and updates the 'updated_at' timestamp.
-func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error {
-	_, err := q.db.ExecContext(ctx, updateUserPassword, arg.PasswordHash, arg.ID)
-	return err
-}
-
-const updateUserRole = `-- name: UpdateUserRole :exec
-UPDATE
-    users
-SET
-    role = ?,
-    updated_at = STRFTIME('%s', 'NOW')
-WHERE
-    id = ?
-`
-
-type UpdateUserRoleParams struct {
-	Role string `json:"role"`
-	ID   string `json:"id"`
-}
-
-// Updates a user's role and updates the 'updated_at' timestamp.
-func (q *Queries) UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) error {
-	_, err := q.db.ExecContext(ctx, updateUserRole, arg.Role, arg.ID)
-	return err
-}
-
-const updateUserRoleAndClaims = `-- name: UpdateUserRoleAndClaims :exec
+const updateUserByID = `-- name: UpdateUserByID :one
 UPDATE users
-SET role = ?, 
-    claims = ?, 
+SET
+    email = COALESCE(?1, email),
+    password_hash = COALESCE(?2, password_hash),
+    role = COALESCE(?3, role),
+    claims = COALESCE(?4, claims),
+    oauth_provider = COALESCE(?5, oauth_provider),
+    oauth_id = COALESCE(?6, oauth_id),
+    is_active = COALESCE(?7, is_active),
     updated_at = STRFTIME('%s', 'NOW')
-WHERE id = ?
+WHERE id = ?8
+RETURNING
+    id,
+    email,
+    password_hash,
+    role,
+    claims,
+    oauth_provider,
+    oauth_id,
+    created_at,
+    updated_at,
+    is_active
 `
 
-type UpdateUserRoleAndClaimsParams struct {
-	Role   string  `json:"role"`
-	Claims *string `json:"claims"`
-	ID     string  `json:"id"`
+type UpdateUserByIDParams struct {
+	Email         *string `json:"email"`
+	PasswordHash  *string `json:"passwordHash"`
+	Role          *string `json:"role"`
+	Claims        *string `json:"claims"`
+	OauthProvider *string `json:"oauthProvider"`
+	OauthID       *string `json:"oauthId"`
+	IsActive      *bool   `json:"isActive"`
+	ID            string  `json:"id"`
 }
 
-// Sets a user's role,JSON claims data and updates the 'updated_at' timestamp.
-// Useful for keeping the root claim syncronized with the role
-func (q *Queries) UpdateUserRoleAndClaims(ctx context.Context, arg UpdateUserRoleAndClaimsParams) error {
-	_, err := q.db.ExecContext(ctx, updateUserRoleAndClaims, arg.Role, arg.Claims, arg.ID)
-	return err
+// Updates any user's field using coalesce so that non updated fields remain
+func (q *Queries) UpdateUserByID(ctx context.Context, arg UpdateUserByIDParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, updateUserByID,
+		arg.Email,
+		arg.PasswordHash,
+		arg.Role,
+		arg.Claims,
+		arg.OauthProvider,
+		arg.OauthID,
+		arg.IsActive,
+		arg.ID,
+	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Role,
+		&i.Claims,
+		&i.OauthProvider,
+		&i.OauthID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.IsActive,
+	)
+	return i, err
 }

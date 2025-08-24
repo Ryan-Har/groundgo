@@ -7,7 +7,6 @@ import (
 	"os"
 
 	"github.com/Ryan-Har/groundgo"
-	"github.com/go-logr/logr"
 )
 
 func main() {
@@ -15,45 +14,39 @@ func main() {
 	handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelDebug,
 	})
-	logger := logr.FromSlogHandler(handler)
+	logger := slog.New(handler)
 
 	//load db
 	db, err := sql.Open("sqlite3", "./groundgo.db")
 	if err != nil {
-		logger.Error(err, "opening database")
+		logger.Error("failed to open database", "err", err)
 	}
 	defer db.Close()
 
 	// create http mux for use with groundgo
 	mainMux := http.NewServeMux()
 
-	// create new groundgo instance
+	//create new groundgo instance
 	gg, err := groundgo.New(
 		groundgo.WithSqliteDB(db),
 		groundgo.WithLogger(logger),
 		groundgo.WithRouter(mainMux),
-		groundgo.WithInMemorySessionStore(),
 	)
 
 	if err != nil {
-		logger.Error(err, "starting groundgo")
+		logger.Error("failed to start groundgo", "err", err)
 	}
 
-	gg.Enforcer.LoadDefaultPolicies()
+	gg.Builtin.LoadAllPolicies()
 	gg.Enforcer.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Hello from the main application root!"))
 	})
-	gg.Enforcer.LoadDefaultRoutes()
-	//gg.Enforcer.SetPolicy("/admin", "*", models.RoleAdmin)
-	// gg.Enforcer.HandleFunc("GET /admin", func(w http.ResponseWriter, r *http.Request) {
-	// 	w.Write([]byte("Hello from the main application admin page!"))
-	// })
-
-	// now load any additional routed however you like
-	// uses the same mux but doesn't include the enforcer
-	// mainMux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
-	// 	w.Write([]byte("Hello from the main application root!"))
-	// })
+	err = gg.Builtin.LoadAllRoutes()
+	if err != nil {
+		slog.Error(err.Error())
+	}
+	//gg.Enforcer.SetPolicy("/admin/users/{id}", "*", models.RoleSystemAdmin)
+	// gg.Enforcer.SetPolicy("/admin", "*", models.RoleAdmin)
 
 	if err := http.ListenAndServe(":8080", mainMux); err != nil {
 		panic("http server failed")

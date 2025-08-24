@@ -25,3 +25,6 @@ dev/volumes
 # Go workspace file
 go.work
 go.work.sum
+
+
+.redocly.yaml

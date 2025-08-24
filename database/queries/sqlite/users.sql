@@ -62,46 +62,6 @@ FROM
 WHERE
     id = ?;
 
--- name: UpdateUserPassword :exec
--- Updates a user's password hash and updates the 'updated_at' timestamp.
-UPDATE
-    users
-SET
-    password_hash = ?,
-    updated_at = STRFTIME('%s', 'NOW')
-WHERE
-    id = ?;
-
--- name: UpdateUserRole :exec
--- Updates a user's role and updates the 'updated_at' timestamp.
-UPDATE
-    users
-SET
-    role = ?,
-    updated_at = STRFTIME('%s', 'NOW')
-WHERE
-    id = ?;
-
--- name: UpdateUserClaims :exec
--- Updates a user's JSON claims data and updates the 'updated_at' timestamp.
-UPDATE
-    users
-SET
-    claims = ?,
-    updated_at = STRFTIME('%s', 'NOW')
-WHERE
-    id = ?;
-
--- name: UpdateUserIsActive :exec
--- Updates a user's active status (e.g., for deactivation) and updates the 'updated_at' timestamp.
-UPDATE
-    users
-SET
-    is_active = ?,
-    updated_at = STRFTIME('%s', 'NOW')
-WHERE
-    id = ?;
-
 -- name: DeleteUser :exec
 -- Deletes a user from the database by their ID.
 DELETE FROM
@@ -157,11 +117,54 @@ FROM
 ORDER BY
     created_at DESC;
 
--- name: UpdateUserRoleAndClaims :exec
--- Sets a user's role,JSON claims data and updates the 'updated_at' timestamp.
--- Useful for keeping the root claim syncronized with the role
+-- name: ListUsersPaginatedWithTotal :many
+-- Retrieves users from database, paginated with limit and offset.
+-- Returns total with users, useful for api pagination.
+WITH filtered AS (
+    SELECT *
+    FROM users
+    WHERE (:role IS NULL OR role = :role)
+)
+SELECT
+    id,
+    email,
+    password_hash,
+    role,
+    claims,
+    oauth_provider,
+    oauth_id,
+    created_at,
+    updated_at,
+    is_active,
+    COUNT(*) OVER() AS total
+FROM
+    filtered
+ORDER BY
+    created_at DESC
+LIMIT ?1 OFFSET ?2;
+
+-- name: UpdateUserByID :one
+-- Updates any user's field using coalesce so that non updated fields remain  
 UPDATE users
-SET role = ?, 
-    claims = ?, 
+SET
+    email = COALESCE(sqlc.narg('email'), email),
+    password_hash = COALESCE(sqlc.narg('password_hash'), password_hash),
+    role = COALESCE(sqlc.narg('role'), role),
+    claims = COALESCE(sqlc.narg('claims'), claims),
+    oauth_provider = COALESCE(sqlc.narg('oauth_provider'), oauth_provider),
+    oauth_id = COALESCE(sqlc.narg('oauth_id'), oauth_id),
+    is_active = COALESCE(sqlc.narg('is_active'), is_active),
     updated_at = STRFTIME('%s', 'NOW')
-WHERE id = ?;
+WHERE id = sqlc.arg('id')
+RETURNING
+    id,
+    email,
+    password_hash,
+    role,
+    claims,
+    oauth_provider,
+    oauth_id,
+    created_at,
+    updated_at,
+    is_active;
+;
