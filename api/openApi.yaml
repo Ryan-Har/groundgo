@@ -39,7 +39,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LoginResponse'
+                $ref: '#/components/schemas/TokenResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -354,7 +354,7 @@ components:
               summary: Invalid token
               value:
                 error: "invalid token"
-                details: "Token is expired or malformed"
+                details: "token is expired or malformed"
 
     Forbidden:
       description: Access denied - insufficient permissions
@@ -364,7 +364,7 @@ components:
             $ref: '#/components/schemas/ErrorResponse'
           example:
             error: "access denied"
-            details: "Insufficient permissions for this operation"
+            details: "insufficient permissions for this operation"
 
     NotFound:
       description: Requested resource not found
@@ -374,7 +374,7 @@ components:
             $ref: '#/components/schemas/ErrorResponse'
           example:
             error: "resource not found"
-            details: "User with specified ID does not exist"
+            details: "user with specified ID does not exist"
 
     Conflict:
       description: Resource conflict (e.g., email already exists)
@@ -384,7 +384,7 @@ components:
             $ref: '#/components/schemas/ErrorResponse'
           example:
             error: "resource conflict"
-            details: "User with this email already exists"
+            details: "user with this email already exists"
 
     InvalidCredentials:
       description: Invalid login credentials
@@ -394,7 +394,7 @@ components:
             $ref: '#/components/schemas/ErrorResponse'
           example:
             error: "invalid credentials"
-            details: "Email or password is incorrect"
+            details: "email or password is incorrect"
 
     InvalidRefreshToken:
       description: Invalid or expired refresh token
@@ -412,7 +412,7 @@ components:
               summary: Invalid refresh token
               value:
                 error: "invalid refresh token"
-                details: "Token is expired, invalid, or has been revoked"
+                details: "token is expired, invalid, or has been revoked"
 
     InternalServerError:
       description: Internal server error
@@ -422,7 +422,7 @@ components:
             $ref: '#/components/schemas/ErrorResponse'
           example:
             error: "internal server error"
-            details: "An unexpected error occurred"
+            details: "an unexpected error occurred"
 
   parameters:
     UserIdParam:
@@ -615,25 +615,6 @@ components:
       description: Possible user roles in the system
 
     # Response schemas
-    LoginResponse:
-      type: object
-      properties:
-        token:
-          type: string
-          description: JWT access token
-        refreshToken:
-          type: string
-          description: Refresh token (also set as httpOnly cookie)
-          nullable: true
-        expiresIn:
-          type: integer
-          description: Token expiration time in seconds
-        user:
-          $ref: '#/components/schemas/User'
-      required:
-        - token
-        - expiresIn
-        - user
 
     TokenResponse:
       type: object
