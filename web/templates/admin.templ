@@ -1,7 +1,7 @@
 package templates
 
 import (
-	"encoding/json"
+	"strings"
 	"fmt"
 	"github.com/Ryan-Har/groundgo/pkg/models"
 	"time"
@@ -351,12 +351,34 @@ templ UserRowEditPartial(user *models.User) {
 	>
 		<td colspan="6">
 			<div class="p-4">
-				<div class="field">
-					<label class="label">Email</label>
-					<div class="control">
-						<p class="is-size-6 has-text-grey-light is-italic">{ user.Email }</p>
+				<div class="columns">
+  					<!-- Email column -->
+					<div class="column">
+						<div class="field">
+						<label class="label">Email</label>
+						<div class="control">
+							<p class="is-size-6 has-text-grey-light is-italic">{ user.Email }</p>
+						</div>
+						</div>
+					</div>
+
+					<!-- Role column -->
+					<div class="column">
+						<div class="field">
+						<label class="label">Role</label>
+						<div class="control">
+							<div class="select is-fullwidth">
+								<select x-model="userRole">
+									<template x-for="role in availableRoles" :key="role">
+										<option :value="role" x-text="role" :selected="role === userRole"></option>
+									</template>
+								</select>
+							</div>
+						</div>
+						</div>
 					</div>
 				</div>
+
 				<!-- Warning message -->
 				<div x-show="showWarning" class="notification is-warning is-light" x-transition>
 					<button class="delete" @click="showWarning = false"></button>
@@ -388,7 +410,7 @@ templ UserRowEditPartial(user *models.User) {
 							<span class="select">
 								<select x-model="newClaimRole">
 									<template x-for="role in availableRoles" :key="role">
-										<option :value="role" x-text="role"></option>
+										<option :value="role" x-text="role" :selected="role === newClaimRole"></option>
 									</template>
 								</select>
 							</span>
@@ -404,10 +426,10 @@ templ UserRowEditPartial(user *models.User) {
 					<div class="control">
 						<button
 							class="button is-primary"
-							hx-put={ fmt.Sprintf("/admin/users/%s/claims", user.ID.String()) }
+							hx-put={ fmt.Sprintf("/admin/users/%s", user.ID.String()) }
 							hx-target="closest tr"
 							hx-swap="outerHTML"
-							:hx-vals="JSON.stringify({ claims: claims })"
+							:hx-vals="JSON.stringify({ role: userRole, claims: claims })"
 						>
 							✅ Save
 						</button>
@@ -485,14 +507,25 @@ func UserRowEditPartialxData(u *models.User) string {
 		defaultRole = allRoles[0]
 	}
 
-	// Helper function to marshal JSON arrays
-	marshalStringArray := func(arr []string) string {
-		bytes, _ := json.Marshal(arr)
-		return string(bytes)
+	toJSStringArray := func(arr []string) string {
+		var sb strings.Builder
+		sb.WriteString("[")
+		for i, s := range arr {
+			if i > 0 {
+				sb.WriteString(",")
+			}
+			// wrap each string in single quotes
+			sb.WriteString("'")
+			sb.WriteString(s)
+			sb.WriteString("'")
+		}
+		sb.WriteString("]")
+		return sb.String()
 	}
 
 	// Build the x-data object manually to avoid HTML escaping issues
-	return fmt.Sprintf(`{
+	return fmt.Sprintf(`() => ({
+        userRole: '%s',
         claims: %s,
         newClaimResource: '',
         newClaimRole: '%s',
@@ -531,10 +564,11 @@ func UserRowEditPartialxData(u *models.User) string {
         removeClaim(index) {
             this.claims.splice(index, 1);
         }
-    }`,
-		marshalStringArray(claimsSlice),
+    })`,
+		u.Role.String(),
+		toJSStringArray(claimsSlice),
 		defaultRole,
-		marshalStringArray(allRoles))
+		toJSStringArray(allRoles))
 }
 
 templ adminStyle() {

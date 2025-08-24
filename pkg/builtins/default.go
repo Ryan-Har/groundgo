@@ -42,6 +42,7 @@ func (b *Builtin) LoadAllPolicies() {
 	b.LoadDefaultLoginPolicies()
 	b.LoadDefaultSignupPolicies()
 	b.LoadDefaultAPIPolicies()
+	b.LoadDefaultAdminPolicies()
 }
 
 func (b *Builtin) LoadDefaultRootPolicy() {
@@ -93,11 +94,15 @@ func (b *Builtin) LoadDefaultAdminRoute() error {
 		"GET " + b.handler.baseRoute + "/admin":                     b.handler.handleAdminGet(),
 		"GET " + b.handler.baseRoute + "/admin/users/{id}":          b.handler.handleAdminUserRowGet(),
 		"GET " + b.handler.baseRoute + "/admin/users/{id}/edit-row": b.handler.handleAdminUserRowEditGet(),
-		"PUT " + b.handler.baseRoute + "/admin/users/{id}/claims":   b.handler.handleAdminUserClaimsPut(),
+		"PUT " + b.handler.baseRoute + "/admin/users/{id}":          b.handler.handleAdminUserUpdatePut(),
 		"DELETE " + b.handler.baseRoute + "/admin/users/{id}":       b.handler.handleAdminUserDelete(),
 		"POST " + b.handler.baseRoute + "/admin/users/{id}/disable": b.handler.handleAdminUserDisable(),
 		"POST " + b.handler.baseRoute + "/admin/users/{id}/enable":  b.handler.handleAdminUserEnable(),
 	})
+}
+
+func (b *Builtin) LoadDefaultAdminPolicies() {
+	b.enforcer.SetPolicy("/admin", "*", models.RoleAdmin)
 }
 
 func (b *Builtin) LoadDefaultAPIRoutes() error {

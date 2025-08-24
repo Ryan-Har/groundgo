@@ -319,7 +319,7 @@ func (e *Enforcer) respondForbidden(w http.ResponseWriter, r *http.Request) {
 	if isAPIRequest(r) {
 		api.ReturnError(w, e.log, api.ForbiddenAccessDenied)
 	} else {
-		http.Error(w, "Forbidden", http.StatusInternalServerError)
+		http.Error(w, "Forbidden", http.StatusForbidden)
 	}
 }
 

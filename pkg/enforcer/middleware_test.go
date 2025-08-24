@@ -532,14 +532,14 @@ func Test_AuthorizationMiddleware_AllowsAndDenies(t *testing.T) {
 	e.AuthorizationMiddleware("/admin", models.RoleAdmin)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})).ServeHTTP(w, req)
-	// browser branch returns 500 (Forbidden text)
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	// browser branch returns 403 (Forbidden text)
+	assert.Equal(t, http.StatusForbidden, w.Code)
 
 	// missing user in context
 	req = httptest.NewRequest(http.MethodGet, "/admin", nil)
 	w = httptest.NewRecorder()
 	e.AuthorizationMiddleware("/admin", models.RoleAdmin)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})).ServeHTTP(w, req)
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, http.StatusForbidden, w.Code)
 }
 
 func Test_responders_nonAPI(t *testing.T) {
@@ -550,7 +550,7 @@ func Test_responders_nonAPI(t *testing.T) {
 	req.Header.Set("Accept", "text/html")
 	w := httptest.NewRecorder()
 	e.respondForbidden(w, req)
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, http.StatusForbidden, w.Code)
 
 	// respondMethodNotAllowed (browser)
 	req = httptest.NewRequest(http.MethodPost, "/page", nil)

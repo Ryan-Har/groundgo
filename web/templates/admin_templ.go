@@ -9,9 +9,9 @@ import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/Ryan-Har/groundgo/pkg/models"
+	"strings"
 	"time"
 )
 
@@ -600,40 +600,40 @@ func UserRowEditPartial(user *models.User) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "\"><td colspan=\"6\"><div class=\"p-4\"><div class=\"field\"><label class=\"label\">Email</label><div class=\"control\"><p class=\"is-size-6 has-text-grey-light is-italic\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "\"><td colspan=\"6\"><div class=\"p-4\"><div class=\"columns\"><!-- Email column --><div class=\"column\"><div class=\"field\"><label class=\"label\">Email</label><div class=\"control\"><p class=\"is-size-6 has-text-grey-light is-italic\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var21 string
 		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(user.Email)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 357, Col: 69}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 360, Col: 70}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "</p></div></div><!-- Warning message --><div x-show=\"showWarning\" class=\"notification is-warning is-light\" x-transition><button class=\"delete\" @click=\"showWarning = false\"></button><p x-text=\"warningMessage\"></p></div><div class=\"field\"><label class=\"label\">Current Claims</label><div class=\"field is-grouped is-grouped-multiline\"><template x-for=\"(claim, index) in claims\" :key=\"index\"><div class=\"control\"><div class=\"tags has-addons\"><span class=\"tag is-link\" x-text=\"claim\"></span> <a class=\"tag is-delete\" @click=\"removeClaim(index)\" title=\"Remove claim\"></a></div></div></template><p x-show=\"claims.length === 0\" class=\"has-text-grey-light is-italic\">No claims assigned.</p></div></div><div class=\"field\"><label class=\"label\">Add New Claim</label><div class=\"field has-addons\"><div class=\"control is-expanded\"><input class=\"input\" type=\"text\" placeholder=\"Resource (e.g., /orders/*)\" x-model=\"newClaimResource\" @keydown.enter.prevent=\"addClaim()\"></div><div class=\"control\"><span class=\"select\"><select x-model=\"newClaimRole\"><template x-for=\"role in availableRoles\" :key=\"role\"><option :value=\"role\" x-text=\"role\"></option></template></select></span></div><div class=\"control\"><button class=\"button is-info\" @click=\"addClaim()\" :disabled=\"!newClaimResource.trim()\">Add</button></div></div></div><div class=\"field is-grouped mt-5\"><div class=\"control\"><button class=\"button is-primary\" hx-put=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "</p></div></div></div><!-- Role column --><div class=\"column\"><div class=\"field\"><label class=\"label\">Role</label><div class=\"control\"><div class=\"select is-fullwidth\"><select x-model=\"userRole\"><template x-for=\"role in availableRoles\" :key=\"role\"><option :value=\"role\" x-text=\"role\" :selected=\"role === userRole\"></option></template></select></div></div></div></div></div><!-- Warning message --><div x-show=\"showWarning\" class=\"notification is-warning is-light\" x-transition><button class=\"delete\" @click=\"showWarning = false\"></button><p x-text=\"warningMessage\"></p></div><div class=\"field\"><label class=\"label\">Current Claims</label><div class=\"field is-grouped is-grouped-multiline\"><template x-for=\"(claim, index) in claims\" :key=\"index\"><div class=\"control\"><div class=\"tags has-addons\"><span class=\"tag is-link\" x-text=\"claim\"></span> <a class=\"tag is-delete\" @click=\"removeClaim(index)\" title=\"Remove claim\"></a></div></div></template><p x-show=\"claims.length === 0\" class=\"has-text-grey-light is-italic\">No claims assigned.</p></div></div><div class=\"field\"><label class=\"label\">Add New Claim</label><div class=\"field has-addons\"><div class=\"control is-expanded\"><input class=\"input\" type=\"text\" placeholder=\"Resource (e.g., /orders/*)\" x-model=\"newClaimResource\" @keydown.enter.prevent=\"addClaim()\"></div><div class=\"control\"><span class=\"select\"><select x-model=\"newClaimRole\"><template x-for=\"role in availableRoles\" :key=\"role\"><option :value=\"role\" x-text=\"role\" :selected=\"role === newClaimRole\"></option></template></select></span></div><div class=\"control\"><button class=\"button is-info\" @click=\"addClaim()\" :disabled=\"!newClaimResource.trim()\">Add</button></div></div></div><div class=\"field is-grouped mt-5\"><div class=\"control\"><button class=\"button is-primary\" hx-put=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var22 string
-		templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("/admin/users/%s/claims", user.ID.String()))
+		templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("/admin/users/%s", user.ID.String()))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 407, Col: 71}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 429, Col: 64}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "\" hx-target=\"closest tr\" hx-swap=\"outerHTML\" :hx-vals=\"JSON.stringify({ claims: claims })\">✅ Save</button></div><div class=\"control\"><button class=\"button\" hx-get=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "\" hx-target=\"closest tr\" hx-swap=\"outerHTML\" :hx-vals=\"JSON.stringify({ role: userRole, claims: claims })\">✅ Save</button></div><div class=\"control\"><button class=\"button\" hx-get=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var23 string
 		templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("/admin/users/%s", user.ID.String()))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 418, Col: 64}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 440, Col: 64}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 		if templ_7745c5c3_Err != nil {
@@ -646,7 +646,7 @@ func UserRowEditPartial(user *models.User) templ.Component {
 		var templ_7745c5c3_Var24 string
 		templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("/admin/users/%s/reset-password", user.ID.String()))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 429, Col: 80}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 451, Col: 80}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
 		if templ_7745c5c3_Err != nil {
@@ -664,7 +664,7 @@ func UserRowEditPartial(user *models.User) templ.Component {
 			var templ_7745c5c3_Var25 string
 			templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("/admin/users/%s/disable", user.ID.String()))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 439, Col: 74}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 461, Col: 74}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 			if templ_7745c5c3_Err != nil {
@@ -682,7 +682,7 @@ func UserRowEditPartial(user *models.User) templ.Component {
 			var templ_7745c5c3_Var26 string
 			templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("/admin/users/%s/enable", user.ID.String()))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 451, Col: 73}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 473, Col: 73}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 			if templ_7745c5c3_Err != nil {
@@ -700,7 +700,7 @@ func UserRowEditPartial(user *models.User) templ.Component {
 		var templ_7745c5c3_Var27 string
 		templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("/admin/users/%s", user.ID.String()))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 462, Col: 67}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/admin.templ`, Line: 484, Col: 67}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 		if templ_7745c5c3_Err != nil {
@@ -726,14 +726,25 @@ func UserRowEditPartialxData(u *models.User) string {
 		defaultRole = allRoles[0]
 	}
 
-	// Helper function to marshal JSON arrays
-	marshalStringArray := func(arr []string) string {
-		bytes, _ := json.Marshal(arr)
-		return string(bytes)
+	toJSStringArray := func(arr []string) string {
+		var sb strings.Builder
+		sb.WriteString("[")
+		for i, s := range arr {
+			if i > 0 {
+				sb.WriteString(",")
+			}
+			// wrap each string in single quotes
+			sb.WriteString("'")
+			sb.WriteString(s)
+			sb.WriteString("'")
+		}
+		sb.WriteString("]")
+		return sb.String()
 	}
 
 	// Build the x-data object manually to avoid HTML escaping issues
-	return fmt.Sprintf(`{
+	return fmt.Sprintf(`() => ({
+        userRole: '%s',
         claims: %s,
         newClaimResource: '',
         newClaimRole: '%s',
@@ -772,10 +783,11 @@ func UserRowEditPartialxData(u *models.User) string {
         removeClaim(index) {
             this.claims.splice(index, 1);
         }
-    }`,
-		marshalStringArray(claimsSlice),
+    })`,
+		u.Role.String(),
+		toJSStringArray(claimsSlice),
 		defaultRole,
-		marshalStringArray(allRoles))
+		toJSStringArray(allRoles))
 }
 
 func adminStyle() templ.Component {

@@ -214,7 +214,7 @@ func (h *Handler) handleAdminUserRowEditGet() http.HandlerFunc {
 	}
 }
 
-func (h *Handler) handleAdminUserClaimsPut() http.HandlerFunc {
+func (h *Handler) handleAdminUserUpdatePut() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 
@@ -226,10 +226,14 @@ func (h *Handler) handleAdminUserClaimsPut() http.HandlerFunc {
 			return
 		}
 
+		var params models.UpdateUserByIDParams
+
 		if err := r.ParseForm(); err != nil {
-			http.Error(w, "Failed to parse form", http.StatusBadRequest)
+			fmt.Println("failed to parse form")
+			http.Error(w, "failed to parse form", http.StatusBadRequest)
 			return
 		}
+		role := models.Role(r.FormValue("role"))
 
 		claimSlice := r.Form["claims"]
 		claims := make(models.Claims)
@@ -243,26 +247,23 @@ func (h *Handler) handleAdminUserClaimsPut() http.HandlerFunc {
 			claims[resource] = role
 		}
 
+		params.ID = usrID
+		params.Role = &role
+		params.Claims = &claims
+
 		// get a copy of the user model before the update for comparison, to update state if neccessary
 		var beforeUpdateUser *models.User
-		if _, exists := claims["/"]; exists {
-			beforeUpdateUser, err = h.auth.GetUserByID(r.Context(), usrID)
-			if err != nil {
-				h.log.Error("unable to list user with uuid", "uuid", usrID.String(), "err", err)
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-		}
-
-		if err := h.auth.UpdateUserClaims(r.Context(), usrID, claims); err != nil {
-			h.log.Error("unable to update user claim", "err", err)
-		}
-
-		afterUpdateUser, err := h.auth.GetUserByID(r.Context(), usrID)
+		beforeUpdateUser, err = h.auth.GetUserByID(r.Context(), usrID)
 		if err != nil {
 			h.log.Error("unable to list user with uuid", "uuid", usrID.String(), "err", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
+		}
+
+		afterUpdateUser, err := h.auth.UpdateUserByID(r.Context(), params)
+		if err != nil {
+			h.log.Error("failed to update user by ID", "err", err)
+			http.Error(w, "failed to update user", http.StatusInternalServerError)
 		}
 
 		statsUpdateHeader := fmt.Sprintf(`{"update-stats":{"admin":%d}}`, adminCountDelta(beforeUpdateUser, afterUpdateUser))
