@@ -229,7 +229,7 @@ func (h *Handler) handleAdminUserUpdatePut() http.HandlerFunc {
 		var params models.UpdateUserByIDParams
 
 		if err := r.ParseForm(); err != nil {
-			fmt.Println("failed to parse form")
+			h.log.Error("failed to parse form")
 			http.Error(w, "failed to parse form", http.StatusBadRequest)
 			return
 		}
