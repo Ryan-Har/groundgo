@@ -60,51 +60,52 @@ func (f *fakeToken) ParseAccessTokenAndValidate(ctx context.Context, token strin
 //
 
 func newBaseEnforcer() *Enforcer {
-	return &Enforcer{
-		session: &fakeSessionStore{
-			getFn: func(ctx context.Context, id string) (*models.Session, error) {
-				// default: guest session exists
-				return &models.Session{
-					ID:        id,
-					UserID:    uuid.Nil,
-					ExpiresAt: time.Now().Add(30 * time.Minute),
-				}, nil
-			},
-			createFn: func(ctx context.Context, uid uuid.UUID) (*models.Session, error) {
-				return &models.Session{
-					ID:        "created-session",
-					UserID:    uid,
-					ExpiresAt: time.Now().Add(30 * time.Minute),
-				}, nil
-			},
-			expireFn: func(cookie *http.Cookie, w http.ResponseWriter) {},
+	session := &fakeSessionStore{
+		getFn: func(ctx context.Context, id string) (*models.Session, error) {
+			// default: guest session exists
+			return &models.Session{
+				ID:        id,
+				UserID:    uuid.Nil,
+				ExpiresAt: time.Now().Add(30 * time.Minute),
+			}, nil
 		},
-		auth: &fakeAuth{
-			getUserFn: func(ctx context.Context, id uuid.UUID) (*models.User, error) {
-				return &models.User{
-					ID:       id,
-					IsActive: true,
-					// keep simple baseline claims
-					Claims: map[string]models.Role{"/": models.RoleUser},
-				}, nil
-			},
+		createFn: func(ctx context.Context, uid uuid.UUID) (*models.Session, error) {
+			return &models.Session{
+				ID:        "created-session",
+				UserID:    uid,
+				ExpiresAt: time.Now().Add(30 * time.Minute),
+			}, nil
 		},
-		token: &fakeToken{
-			parseFn: func(ctx context.Context, token string) (*tokenstore.AccessToken, error) {
-				return nil, errors.New("invalid") // default: invalid so JWT path is off unless overridden
-			},
-		},
-		log: NoopLogger(),
+		expireFn: func(cookie *http.Cookie, w http.ResponseWriter) {},
 	}
+	auth := &fakeAuth{
+		getUserFn: func(ctx context.Context, id uuid.UUID) (*models.User, error) {
+			return &models.User{
+				ID:       id,
+				IsActive: true,
+				// keep simple baseline claims
+				Claims: map[string]models.Role{"/": models.RoleUser},
+			}, nil
+		},
+	}
+	token := &fakeToken{
+		parseFn: func(ctx context.Context, token string) (*tokenstore.AccessToken, error) {
+			return nil, errors.New("invalid") // default: invalid so JWT path is off unless overridden
+		},
+	}
+
+	router := http.NewServeMux()
+
+	return NewEnforcer(NoopLogger(), router, auth, session, token, nil)
 }
 
 func nextHandlerCaptureUserAndJWT(t *testing.T, gotUser **models.User, gotJWT *string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user, ok := r.Context().Value(UserContextKey).(*models.User)
+		user, ok := r.Context().Value(userContextKey).(*models.User)
 		require.True(t, ok, "user missing from context")
 		*gotUser = user
 
-		if s, ok := r.Context().Value(JWTContextKey).(string); ok {
+		if s, ok := r.Context().Value(jwtContextKey).(string); ok {
 			*gotJWT = s
 		}
 		w.WriteHeader(http.StatusOK)
@@ -514,7 +515,7 @@ func Test_AuthorizationMiddleware_AllowsAndDenies(t *testing.T) {
 		Claims: map[string]models.Role{"/admin": models.RoleAdmin},
 	}
 	req := httptest.NewRequest(http.MethodGet, "/admin", nil)
-	req = req.WithContext(context.WithValue(req.Context(), UserContextKey, admin))
+	req = req.WithContext(context.WithValue(req.Context(), userContextKey, admin))
 	w := httptest.NewRecorder()
 	e.AuthorizationMiddleware("/admin", models.RoleAdmin)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -527,7 +528,7 @@ func Test_AuthorizationMiddleware_AllowsAndDenies(t *testing.T) {
 		Claims: map[string]models.Role{"/admin": models.RoleUser},
 	}
 	req = httptest.NewRequest(http.MethodGet, "/admin", nil)
-	req = req.WithContext(context.WithValue(req.Context(), UserContextKey, usr))
+	req = req.WithContext(context.WithValue(req.Context(), userContextKey, usr))
 	w = httptest.NewRecorder()
 	e.AuthorizationMiddleware("/admin", models.RoleAdmin)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

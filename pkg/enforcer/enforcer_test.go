@@ -89,7 +89,7 @@ func TestBuildPrefixes(t *testing.T) {
 
 // Additional FindMatchingPolicy tests for HTTP-specific scenarios
 func TestFindMatchingPolicyHTTPScenarios(t *testing.T) {
-	e := NewEnforcer(NoopLogger(), nil, nil, nil, nil)
+	e := NewEnforcer(NoopLogger(), nil, nil, nil, nil, nil)
 
 	// Setup realistic HTTP route policies
 	e.SetPolicy("/api/v1/users", "GET", models.RoleUser)
@@ -183,7 +183,7 @@ func TestFindMatchingPolicyHTTPScenarios(t *testing.T) {
 
 // Test policy precedence - exact method wins over wildcard on same path
 func TestPolicyPrecedence(t *testing.T) {
-	e := NewEnforcer(NoopLogger(), nil, nil, nil, nil)
+	e := NewEnforcer(NoopLogger(), nil, nil, nil, nil, nil)
 
 	// Set up conflicting policies to test precedence
 	e.SetPolicy("/api/users", "*", models.RoleUser)       // wildcard first
@@ -200,7 +200,7 @@ func TestPolicyPrecedence(t *testing.T) {
 
 // Test that policies don't interfere with each other
 func TestPolicyIsolation(t *testing.T) {
-	e := NewEnforcer(NoopLogger(), nil, nil, nil, nil)
+	e := NewEnforcer(NoopLogger(), nil, nil, nil, nil, nil)
 
 	e.SetPolicy("/admin", "*", models.RoleAdmin)
 	e.SetPolicy("/admin/users", "GET", models.RoleUser) // less restrictive child
@@ -218,7 +218,7 @@ func TestPolicyIsolation(t *testing.T) {
 
 // Test empty method string (edge case)
 func TestEmptyMethod(t *testing.T) {
-	e := NewEnforcer(NoopLogger(), nil, nil, nil, nil)
+	e := NewEnforcer(NoopLogger(), nil, nil, nil, nil, nil)
 	e.SetPolicy("/api", "*", models.RoleUser)
 
 	// Empty method should be converted to uppercase and not match wildcard
@@ -229,7 +229,7 @@ func TestEmptyMethod(t *testing.T) {
 
 // --- SetPolicy test (sanity check) ---
 func TestSetPolicyStoresUppercaseMethods(t *testing.T) {
-	e := NewEnforcer(NoopLogger(), nil, nil, nil, nil)
+	e := NewEnforcer(NoopLogger(), nil, nil, nil, nil, nil)
 	e.SetPolicy("/some/path", "get", models.RoleAdmin)
 	require.Equal(t, models.RoleAdmin, e.Policies["/some/path"]["GET"])
 }

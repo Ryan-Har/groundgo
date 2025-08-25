@@ -36,10 +36,8 @@ func (e *Enforcer) Handle(route string, handler http.Handler) error {
 
 	method, path := parseRoute(route)
 
-	// Initialize handler map if not already
-	if e.handlers == nil {
-		e.handlers = make(map[string]map[string]http.Handler)
-	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
 
 	// Initialize method map for the path if not already
 	if _, exists := e.handlers[path]; !exists {

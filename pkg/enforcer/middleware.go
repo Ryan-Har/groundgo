@@ -16,8 +16,8 @@ import (
 type contextKey string
 
 const (
-	UserContextKey contextKey = "user"
-	JWTContextKey  contextKey = "jwt"
+	userContextKey contextKey = "user"
+	jwtContextKey  contextKey = "jwt"
 )
 
 // AuthenticationMiddleware is an HTTP middleware that extracts and validates
@@ -80,8 +80,8 @@ func (e *Enforcer) AuthenticationMiddleware(next http.Handler) http.Handler {
 
 		// Store the user and jwt string (if available) in the request context
 		ctx := context.WithValue(
-			context.WithValue(r.Context(), UserContextKey, authUser),
-			JWTContextKey, tokenString)
+			context.WithValue(r.Context(), userContextKey, authUser),
+			jwtContextKey, tokenString)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
@@ -112,7 +112,7 @@ func (e *Enforcer) AuthenticationMiddleware(next http.Handler) http.Handler {
 func (e *Enforcer) AuthorizationMiddleware(path string, required models.Role) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			user, ok := r.Context().Value(UserContextKey).(*models.User)
+			user, ok := UserFromContext(r.Context())
 			if !ok {
 				e.log.Error("AuthorizationMiddleware expected User in http context and did not receive", "path", path)
 				e.respondForbidden(w, r)
@@ -146,7 +146,7 @@ func (e *Enforcer) getUserFromSession(ctx context.Context, session *models.Sessi
 	if err != nil || user == nil || !user.IsActive {
 		e.log.Info("session request from expired/unknown/inactive user", "id", session.UserID)
 		e.session.ExpireCookie(cookie, w)
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		http.Redirect(w, r, e.RedirectOnAuthErrorPath, http.StatusSeeOther)
 		return nil, errors.New("invalid user session")
 	}
 	return user, nil
@@ -196,10 +196,10 @@ func (e *Enforcer) handleSessionError(err error, cookie *http.Cookie, w http.Res
 	if errors.Is(err, sessionstore.ErrSessionExpired) {
 		e.log.Debug("expired session found", "session_id", cookie.Value, "url", r.URL.Path)
 		e.session.ExpireCookie(cookie, w)
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		http.Redirect(w, r, e.RedirectOnAuthErrorPath, http.StatusSeeOther)
 	} else {
 		e.log.Error("unknown error getting session cookie", "error", err.Error())
-		http.Redirect(w, r, "/login", http.StatusInternalServerError)
+		http.Redirect(w, r, e.RedirectOnAuthErrorPath, http.StatusInternalServerError)
 	}
 }
 
@@ -241,7 +241,7 @@ func (e *Enforcer) tryJWTAuth(r *http.Request) (*models.User, string, bool) {
 
 	user, err := e.validateTokenAndGetUser(r.Context(), tokenStr)
 	if err != nil {
-		e.log.Debug("JWT token invalid or user not found", "error", err.Error(), "url", r.URL.Path)
+		e.log.Debug("JWT authentication failed", "type", "jwt_invalid", "url", r.URL.Path)
 		return nil, "", false
 	}
 
@@ -285,12 +285,12 @@ func (e *Enforcer) createGuestSession(r *http.Request, w http.ResponseWriter) (*
 	}
 
 	http.SetCookie(w, &http.Cookie{
-		Name:     "session_token",
+		Name:     e.GuestCookieName,
 		Value:    guestSession.ID,
 		Expires:  guestSession.ExpiresAt,
 		HttpOnly: true,
-		Secure:   false, // Set to true in production
-		Path:     "/",
+		Secure:   e.GuestCookieSecure,
+		Path:     e.GuestCookiePath,
 	})
 
 	user, err := e.getUserFromSession(r.Context(), guestSession, nil, w, r)
@@ -329,4 +329,14 @@ func (e *Enforcer) respondMethodNotAllowed(w http.ResponseWriter, r *http.Reques
 	} else {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func UserFromContext(ctx context.Context) (*models.User, bool) {
+	user, ok := ctx.Value(userContextKey).(*models.User)
+	return user, ok
+}
+
+func JWTFromContext(ctx context.Context) (string, bool) {
+	user, ok := ctx.Value(jwtContextKey).(string)
+	return user, ok
 }

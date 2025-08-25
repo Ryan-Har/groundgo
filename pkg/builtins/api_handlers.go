@@ -23,7 +23,7 @@ func (h *Handler) handleAPITokenVerify() http.HandlerFunc {
 		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 
 		// middleware will have already denied the user by this point
-		tokenstr, ok := r.Context().Value(enforcer.JWTContextKey).(string)
+		tokenstr, ok := enforcer.JWTFromContext(r.Context())
 		if !ok || tokenstr == "" {
 			api.ReturnError(w, h.log, api.UnauthorizedInvalidToken)
 			return
@@ -150,7 +150,7 @@ func (h *Handler) handleAPILogoutPost() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 
-		tokenstr, ok := r.Context().Value(enforcer.JWTContextKey).(string)
+		tokenstr, ok := enforcer.JWTFromContext(r.Context())
 		if !ok || tokenstr == "" {
 			api.ReturnError(w, h.log, api.UnauthorizedInvalidToken)
 			return
@@ -220,7 +220,7 @@ func (h *Handler) handleAPIGetOwnUser() http.HandlerFunc {
 		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 
 		// something has gone wrong with the middleware
-		user, ok := r.Context().Value(enforcer.UserContextKey).(*models.User)
+		user, ok := enforcer.UserFromContext(r.Context())
 		if !ok {
 			h.log.Error("user not found in context for GetOwnUser")
 			api.ReturnError(w, h.log, api.InternalServerError)
@@ -246,7 +246,7 @@ func (h *Handler) HandleAPIChangeOwnPassword() http.HandlerFunc {
 		var puReq api.PasswordUpdateRequest
 
 		// something has gone wrong with the middleware
-		user, ok := r.Context().Value(enforcer.UserContextKey).(*models.User)
+		user, ok := enforcer.UserFromContext(r.Context())
 		if !ok {
 			h.log.Error("user not found in context for GetOwnUser")
 			api.ReturnError(w, h.log, api.InternalServerError)

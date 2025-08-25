@@ -95,24 +95,6 @@ func TestHandle_Success(t *testing.T) {
 	}
 }
 
-func TestHandle_InitializesHandlersMap(t *testing.T) {
-	e := createTestEnforcer()
-	e.handlers = nil // handlers is nil initially
-
-	err := e.Handle("GET /test", http.HandlerFunc(dummyHandler))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if e.handlers == nil {
-		t.Fatal("handlers map should be initialized")
-	}
-
-	if _, ok := e.handlers["/test"]["GET"]; !ok {
-		t.Error("handler should be stored after initialization")
-	}
-}
-
 func TestHandle_DuplicateRoute(t *testing.T) {
 	e := createTestEnforcer()
 

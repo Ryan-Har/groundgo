@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/Ryan-Har/groundgo/internal/tokenstore"
 	"github.com/Ryan-Har/groundgo/pkg/models"
@@ -22,6 +23,15 @@ type Enforcer struct {
 	auth     AuthStore
 	session  SessionStore
 	token    TokenStore
+	Config
+	mu sync.RWMutex // mutex to protect policies and handlers maps
+}
+
+type Config struct {
+	GuestCookieName         string // string used for the session cookie of guest user
+	GuestCookieSecure       bool   // determines if the cookie should be secure or not. Recommended always to be true in production environments
+	GuestCookiePath         string // path set for the session cookie of the guest user
+	RedirectOnAuthErrorPath string // path of the redirection location when authentication fails
 }
 
 // AuthStore defines the subset of authentication methods
@@ -75,21 +85,40 @@ type TokenStore interface {
 //
 // Example:
 //
-//	enforcer := NewEnforcer(logger, router, authStore, sessionStore)
-func NewEnforcer(logger *slog.Logger, router Router, auth AuthStore, sess SessionStore, token TokenStore) *Enforcer {
+//	enforcer := NewEnforcer(logger, router, authStore, sessionStore, tokenstore, config)
+func NewEnforcer(logger *slog.Logger, router Router, auth AuthStore, sess SessionStore, token TokenStore, config *Config) *Enforcer {
+	if config == nil {
+		config = newDefaultConfig()
+	}
+
 	return &Enforcer{
 		log:      logger,
-		Policies: map[string]map[string]models.Role{},
+		Policies: make(map[string]map[string]models.Role),
+		handlers: make(map[string]map[string]http.Handler),
 		router:   router,
 		auth:     auth,
 		session:  sess,
 		token:    token,
+		Config:   *config,
+	}
+}
+
+// new default config returns a pointer to Config with the default options
+func newDefaultConfig() *Config {
+	return &Config{
+		GuestCookieName:         "session_token",
+		GuestCookiePath:         "/",
+		GuestCookieSecure:       true,
+		RedirectOnAuthErrorPath: "/login",
 	}
 }
 
 // SetPolicy allows defining the minimum required role for a given resource path and HTTP method.
 // Use "*" as the method to apply the policy to all methods for that path.
 func (e *Enforcer) SetPolicy(resourcePath string, method string, requiredRole models.Role) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
 	if !strings.HasPrefix(resourcePath, "/") {
 		resourcePath = "/" + resourcePath
 	}
@@ -112,6 +141,9 @@ func (e *Enforcer) FindMatchingPolicy(resourcePath, method string) (models.Role,
 		"method", method,
 		"paths to check", pathsToCheck,
 	)
+
+	e.mu.RLock()
+	defer e.mu.RUnlock()
 
 	for _, p := range pathsToCheck {
 		if methodPolicies, ok := e.Policies[p]; ok {

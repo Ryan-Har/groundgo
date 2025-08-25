@@ -77,7 +77,13 @@ func New(opts ...Option) (*GroundGo, error) {
 	gg.Store = stores
 
 	// load enforcer
-	gg.Enforcer = enforcer.NewEnforcer(gg.logger, gg.router, gg.Store.Auth, gg.Store.Session, gg.Store.Token)
+	enforcerConfig := &enforcer.Config{
+		GuestCookieName:         "session_token",
+		GuestCookiePath:         "/",
+		GuestCookieSecure:       false,
+		RedirectOnAuthErrorPath: "/",
+	}
+	gg.Enforcer = enforcer.NewEnforcer(gg.logger, gg.router, gg.Store.Auth, gg.Store.Session, gg.Store.Token, enforcerConfig)
 	gg.logger.Info("groundgo enforcer loaded")
 
 	gg.Builtin = builtins.New(gg.logger, gg.Enforcer, gg.Store.Auth, gg.Store.Session, gg.Store.Token)
