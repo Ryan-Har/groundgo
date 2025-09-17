@@ -256,6 +256,7 @@ func (h *Handler) handleAdminUserUpdatePut() http.HandlerFunc {
 		if err != nil {
 			h.log.Error("failed to update user by ID", "err", err)
 			http.Error(w, "failed to update user", http.StatusInternalServerError)
+			return
 		}
 
 		statsUpdateHeader := fmt.Sprintf(`{"update-stats":{"admin":%d}}`, adminCountDelta(beforeUpdateUser, afterUpdateUser))

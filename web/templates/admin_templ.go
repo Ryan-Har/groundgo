@@ -172,7 +172,7 @@ func pageStatisticsxData(users []*models.User) string {
 	var total, active, inactive, admin int
 	for _, user := range users {
 		total++
-		if user.Claims.HasAtLeast("/", models.RoleAdmin) {
+		if user.Role.AtLeast(models.RoleAdmin) {
 			admin++
 		}
 		if user.IsActive {
