@@ -1,19 +1,12 @@
 package enforcer
 
 import (
-	"io"
-	"log/slog"
 	"strings"
 	"testing"
 
 	"github.com/Ryan-Har/groundgo/pkg/models"
 	"github.com/stretchr/testify/require"
 )
-
-// --- Helper: a no-op logger for tests ---
-func NoopLogger() *slog.Logger {
-	return slog.New(slog.NewTextHandler(io.Discard, nil))
-}
 
 // --- buildPrefixes tests ---
 func TestBuildPrefixes(t *testing.T) {

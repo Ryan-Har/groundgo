@@ -3,11 +3,14 @@ package enforcer
 import (
 	"context"
 	"errors"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	"github.com/Ryan-Har/groundgo/internal/cookies"
 	"github.com/Ryan-Har/groundgo/internal/sessionstore"
 	"github.com/Ryan-Har/groundgo/internal/tokenstore"
 	"github.com/Ryan-Har/groundgo/pkg/models"
@@ -20,6 +23,11 @@ import (
 //
 // ---------- fakes for dependencies (no external mocking lib required) ----------
 //
+
+// NoopLogger returns a logger that discards all log messages.
+func NoopLogger() *slog.Logger {
+	return slog.New(slog.NewJSONHandler(io.Discard, nil))
+}
 
 type fakeSessionStore struct {
 	getFn    func(ctx context.Context, id string) (*models.Session, error)
@@ -96,7 +104,10 @@ func newBaseEnforcer() *Enforcer {
 
 	router := http.NewServeMux()
 
-	return NewEnforcer(NoopLogger(), router, auth, session, token, nil)
+	// Use the helper func to create a real cookie manager
+	cookieManager := cookies.NewManagerWithInsecureDefaults(NoopLogger())
+
+	return NewEnforcer(NoopLogger(), router, auth, session, token, cookieManager)
 }
 
 func nextHandlerCaptureUserAndJWT(t *testing.T, gotUser **models.User, gotJWT *string) http.Handler {
@@ -213,7 +224,6 @@ func Test_getUserFromSession(t *testing.T) {
 	// guest session -> returns guest user
 	guest, err := e.getUserFromSession(context.Background(),
 		&models.Session{UserID: uuid.Nil},
-		nil,
 		httptest.NewRecorder(),
 		httptest.NewRequest(http.MethodGet, "/", nil),
 	)
@@ -225,7 +235,6 @@ func Test_getUserFromSession(t *testing.T) {
 	uid := uuid.New()
 	u, err := e.getUserFromSession(context.Background(),
 		&models.Session{UserID: uid},
-		nil,
 		httptest.NewRecorder(),
 		httptest.NewRequest(http.MethodGet, "/", nil),
 	)
@@ -241,7 +250,6 @@ func Test_getUserFromSession(t *testing.T) {
 	w := httptest.NewRecorder()
 	_, err = e.getUserFromSession(context.Background(),
 		&models.Session{UserID: uuid.New()},
-		&http.Cookie{Name: "session_token", Value: "abc"},
 		w,
 		httptest.NewRequest(http.MethodGet, "/", nil),
 	)
@@ -514,6 +522,8 @@ func Test_AuthorizationMiddleware_AllowsAndDenies(t *testing.T) {
 		ID:     uuid.New(),
 		Claims: map[string]models.Role{"/admin": models.RoleAdmin},
 	}
+	//set policy for test
+	e.Policies["/admin"] = map[string]models.Role{"GET": models.RoleAdmin}
 	req := httptest.NewRequest(http.MethodGet, "/admin", nil)
 	req = req.WithContext(context.WithValue(req.Context(), userContextKey, admin))
 	w := httptest.NewRecorder()

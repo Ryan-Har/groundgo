@@ -54,17 +54,13 @@ func (h *Handler) handleLoginPost() http.HandlerFunc {
 		session, err := h.session.Create(r.Context(), user.ID)
 		if err != nil {
 			h.log.Error("creating session", "err", err)
+			return
 		}
 
-		// TODO: Make secure before release
-		http.SetCookie(w, &http.Cookie{
-			Name:     "session_token",
-			Value:    session.ID,
-			Expires:  session.ExpiresAt,
-			HttpOnly: true,
-			Secure:   false,
-			Path:     "/",
-		})
+		if err := h.cookieOpts.SetUserSessionCookie(w, session.ID, &session.ExpiresAt); err != nil {
+			h.log.Error("failed to set user session cookie", "err", err)
+			return
+		}
 
 		w.Header().Set("HX-Redirect", "/")
 		w.WriteHeader(http.StatusOK)
@@ -130,14 +126,10 @@ func (h *Handler) handleSignupPost() http.HandlerFunc {
 			h.log.Error("creating session", "err", err)
 		}
 
-		http.SetCookie(w, &http.Cookie{
-			Name:     "session_token",
-			Value:    session.ID,
-			Expires:  session.ExpiresAt,
-			HttpOnly: true,
-			Secure:   false,
-			Path:     "/",
-		})
+		if err := h.cookieOpts.SetUserSessionCookie(w, session.ID, &session.ExpiresAt); err != nil {
+			h.log.Error("failed to set user session cookie", "err", err)
+			return
+		}
 
 		w.Header().Set("HX-Redirect", "/")
 		w.WriteHeader(http.StatusOK)

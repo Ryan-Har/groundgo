@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"log/slog"
-	"net/http"
 	"time"
 
 	"github.com/Ryan-Har/groundgo/internal/logutil"
@@ -28,11 +27,6 @@ func NewBase(logger *slog.Logger, tokenLength int, tokenDuration time.Duration) 
 		stopCh:        make(chan struct{}),
 	}
 	return s
-}
-
-func (s *baseSessionStore) ExpireCookie(c *http.Cookie, w http.ResponseWriter) {
-	c.Expires = time.Unix(0, 0)
-	http.SetCookie(w, c)
 }
 
 // createSession generates a models.Session struct based on the provided input

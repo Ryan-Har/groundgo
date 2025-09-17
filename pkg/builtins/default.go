@@ -16,10 +16,10 @@ type Builtin struct {
 }
 
 // New initializes and returns a new DefaultRoutes instance
-func New(logger *slog.Logger, enforcer *enforcer.Enforcer, auth store.Authstore, session store.Sessionstore, token store.Tokenstore) *Builtin {
+func New(logger *slog.Logger, enforcer *enforcer.Enforcer, auth store.Authstore, session store.Sessionstore, token store.Tokenstore, cookie CookieOpts) *Builtin {
 	return &Builtin{
 		enforcer: enforcer,
-		handler:  *newHandler(logger, auth, session, token, "", "/groundgo/api/v1"),
+		handler:  *newHandler(logger, auth, session, token, cookie, "", "/groundgo/api/v1"),
 	}
 }
 

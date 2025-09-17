@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"log/slog"
-	"net/http"
 	"time"
 
 	"github.com/Ryan-Har/groundgo/database"
@@ -109,10 +108,6 @@ type Sessionstore interface {
 	// CleanupExpiredSessions deletes expired sessions.
 	// For in-memory stores, this is critical to avoid memory leaks.
 	CleanupExpired(ctx context.Context) error
-
-	// ExpireCookie invalidates a session cookie in the client response.
-	// Should be used during logout or session invalidation.
-	ExpireCookie(c *http.Cookie, w http.ResponseWriter)
 }
 
 // Tokenstore defines the behavior for issuing, validating, and refreshing tokens.

@@ -133,20 +133,16 @@ func (e *Enforcer) AuthorizationMiddleware(path string, required models.Role) fu
 
 // getUserFromSession handles session-based authentication
 // It returns the user model if it exists or a guest user model if uuid is nil.
-func (e *Enforcer) getUserFromSession(ctx context.Context, session *models.Session, cookie *http.Cookie, w http.ResponseWriter, r *http.Request) (*models.User, error) {
+func (e *Enforcer) getUserFromSession(ctx context.Context, session *models.Session, w http.ResponseWriter, r *http.Request) (*models.User, error) {
 	if session.UserID == uuid.Nil {
-		guestUser := &models.User{
-			ID:     uuid.Nil,
-			Claims: map[string]models.Role{"/": models.RoleGuest},
-		}
-		return guestUser, nil
+		return models.NewGuestUser(), nil
 	}
 
 	user, err := e.auth.GetUserByID(ctx, session.UserID)
 	if err != nil || user == nil || !user.IsActive {
 		e.log.Info("session request from expired/unknown/inactive user", "id", session.UserID)
-		e.session.ExpireCookie(cookie, w)
-		http.Redirect(w, r, e.RedirectOnAuthErrorPath, http.StatusSeeOther)
+		e.cookie.ClearUserSessionCookie(w)
+		http.Redirect(w, r, e.cookie.GetConfig().RedirectOnAuthErrorPath, http.StatusSeeOther)
 		return nil, errors.New("invalid user session")
 	}
 	return user, nil
@@ -195,11 +191,11 @@ func (e *Enforcer) validateTokenAndGetUser(ctx context.Context, tokenString stri
 func (e *Enforcer) handleSessionError(err error, cookie *http.Cookie, w http.ResponseWriter, r *http.Request) {
 	if errors.Is(err, sessionstore.ErrSessionExpired) {
 		e.log.Debug("expired session found", "session_id", cookie.Value, "url", r.URL.Path)
-		e.session.ExpireCookie(cookie, w)
-		http.Redirect(w, r, e.RedirectOnAuthErrorPath, http.StatusSeeOther)
+		e.cookie.ClearUserSessionCookie(w)
+		http.Redirect(w, r, e.cookie.GetConfig().RedirectOnAuthErrorPath, http.StatusSeeOther)
 	} else {
 		e.log.Error("unknown error getting session cookie", "error", err.Error())
-		http.Redirect(w, r, e.RedirectOnAuthErrorPath, http.StatusInternalServerError)
+		http.Redirect(w, r, e.cookie.GetConfig().RedirectOnAuthErrorPath, http.StatusInternalServerError)
 	}
 }
 
@@ -255,7 +251,7 @@ func (e *Enforcer) tryJWTAuth(r *http.Request) (*models.User, string, bool) {
 func (e *Enforcer) trySessionAuth(r *http.Request, w http.ResponseWriter) (*models.User, bool) {
 	session, cookie, err := e.getSessionFromCookie(r)
 	if session != nil && err == nil {
-		user, err := e.getUserFromSession(r.Context(), session, cookie, w, r)
+		user, err := e.getUserFromSession(r.Context(), session, w, r)
 		if err == nil && user != nil {
 			return user, true
 		}
@@ -274,31 +270,30 @@ func (e *Enforcer) trySessionAuth(r *http.Request, w http.ResponseWriter) (*mode
 // If session creation or user resolution fails, an error is returned.
 func (e *Enforcer) createGuestSession(r *http.Request, w http.ResponseWriter) (*models.User, error) {
 	e.log.Debug("unauthenticated request, creating guest session",
+		"guest_state_enabled", e.cookie.GetConfig().GuestStateEnabled,
 		"remote_address", r.RemoteAddr,
 		"url", r.URL.Path,
 		"user_agent", r.UserAgent())
 
-	guestSession, err := e.session.Create(r.Context(), uuid.Nil)
-	if err != nil {
-		e.log.Error("unable to create guest session", "err", err)
-		return nil, err
+	// only write to stores and create a cookie if the state is enabled
+	if e.cookie.GetConfig().GuestStateEnabled {
+		guestSession, err := e.session.Create(r.Context(), uuid.Nil)
+		if err != nil {
+			e.log.Error("unable to create guest session", "err", err)
+			return nil, err
+		}
+		if err := e.cookie.SetGuestCookie(w, guestSession.ID, &guestSession.ExpiresAt); err != nil {
+			return nil, err
+		}
+
+		user, err := e.getUserFromSession(r.Context(), guestSession, w, r)
+		if err != nil {
+			return nil, err
+		}
+		return user, nil
+	} else {
+		return models.NewGuestUser(), nil
 	}
-
-	http.SetCookie(w, &http.Cookie{
-		Name:     e.GuestCookieName,
-		Value:    guestSession.ID,
-		Expires:  guestSession.ExpiresAt,
-		HttpOnly: true,
-		Secure:   e.GuestCookieSecure,
-		Path:     e.GuestCookiePath,
-	})
-
-	user, err := e.getUserFromSession(r.Context(), guestSession, nil, w, r)
-	if err != nil {
-		return nil, err
-	}
-
-	return user, nil
 }
 
 // isAPIRequest checks if a request is  an API request by checking that both an accept header exists with json

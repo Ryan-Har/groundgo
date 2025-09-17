@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/Ryan-Har/groundgo/internal/cookies"
 	"github.com/Ryan-Har/groundgo/pkg/builtins"
 	"github.com/Ryan-Har/groundgo/pkg/enforcer"
 	"github.com/Ryan-Har/groundgo/pkg/store"
@@ -76,17 +77,12 @@ func New(opts ...Option) (*GroundGo, error) {
 	gg.logger.Info("groundgo stores loaded")
 	gg.Store = stores
 
-	// load enforcer
-	enforcerConfig := &enforcer.Config{
-		GuestCookieName:         "session_token",
-		GuestCookiePath:         "/",
-		GuestCookieSecure:       false,
-		RedirectOnAuthErrorPath: "/",
-	}
-	gg.Enforcer = enforcer.NewEnforcer(gg.logger, gg.router, gg.Store.Auth, gg.Store.Session, gg.Store.Token, enforcerConfig)
+	//cookieStore := cookies.NewManagerWithInsecureDefaults(gg.logger)
+	cookieStore := cookies.NewManagerWithDefaults(gg.logger)
+	gg.Enforcer = enforcer.NewEnforcer(gg.logger, gg.router, gg.Store.Auth, gg.Store.Session, gg.Store.Token, cookieStore)
 	gg.logger.Info("groundgo enforcer loaded")
 
-	gg.Builtin = builtins.New(gg.logger, gg.Enforcer, gg.Store.Auth, gg.Store.Session, gg.Store.Token)
+	gg.Builtin = builtins.New(gg.logger, gg.Enforcer, gg.Store.Auth, gg.Store.Session, gg.Store.Token, cookieStore)
 	gg.logger.Info("groundgo builtins loaded")
 
 	gg.logger.Info("groundgo enforcer loaded")

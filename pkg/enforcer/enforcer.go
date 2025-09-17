@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/Ryan-Har/groundgo/internal/cookies"
 	"github.com/Ryan-Har/groundgo/internal/tokenstore"
 	"github.com/Ryan-Har/groundgo/pkg/models"
 	"github.com/google/uuid"
@@ -23,15 +25,9 @@ type Enforcer struct {
 	auth     AuthStore
 	session  SessionStore
 	token    TokenStore
-	Config
-	mu sync.RWMutex // mutex to protect policies and handlers maps
-}
+	cookie   CookieStore
 
-type Config struct {
-	GuestCookieName         string // string used for the session cookie of guest user
-	GuestCookieSecure       bool   // determines if the cookie should be secure or not. Recommended always to be true in production environments
-	GuestCookiePath         string // path set for the session cookie of the guest user
-	RedirectOnAuthErrorPath string // path of the redirection location when authentication fails
+	mu sync.RWMutex // mutex to protect policies and handlers maps
 }
 
 // AuthStore defines the subset of authentication methods
@@ -52,10 +48,6 @@ type SessionStore interface {
 	// Get retrieves the session by its ID.
 	// Should return an error or (nil, nil) if the session is expired or not found.
 	Get(ctx context.Context, sessionID string) (*models.Session, error)
-
-	// ExpireCookie clears a session cookie on the client by writing
-	// an expired cookie to the response. Used during logout and invalidation flows.
-	ExpireCookie(c *http.Cookie, w http.ResponseWriter)
 }
 
 // TokenStore defines the token parsing and revocation-checking
@@ -64,6 +56,12 @@ type TokenStore interface {
 	// ParseAccessTokenAndValidate is a helper that both Parses Access Token
 	// And Checks if the token is revoked, providing an error if it is not a valid token
 	ParseAccessTokenAndValidate(ctx context.Context, tokenStr string) (*tokenstore.AccessToken, error)
+}
+
+type CookieStore interface {
+	SetGuestCookie(w http.ResponseWriter, value string, customExpires *time.Time) error
+	GetConfig() cookies.CookieConfig
+	ClearUserSessionCookie(w http.ResponseWriter) error
 }
 
 // NewEnforcer initializes and returns a new Enforcer instance.
@@ -86,11 +84,7 @@ type TokenStore interface {
 // Example:
 //
 //	enforcer := NewEnforcer(logger, router, authStore, sessionStore, tokenstore, config)
-func NewEnforcer(logger *slog.Logger, router Router, auth AuthStore, sess SessionStore, token TokenStore, config *Config) *Enforcer {
-	if config == nil {
-		config = newDefaultConfig()
-	}
-
+func NewEnforcer(logger *slog.Logger, router Router, auth AuthStore, sess SessionStore, token TokenStore, cookie CookieStore) *Enforcer {
 	return &Enforcer{
 		log:      logger,
 		Policies: make(map[string]map[string]models.Role),
@@ -99,17 +93,7 @@ func NewEnforcer(logger *slog.Logger, router Router, auth AuthStore, sess Sessio
 		auth:     auth,
 		session:  sess,
 		token:    token,
-		Config:   *config,
-	}
-}
-
-// new default config returns a pointer to Config with the default options
-func newDefaultConfig() *Config {
-	return &Config{
-		GuestCookieName:         "session_token",
-		GuestCookiePath:         "/",
-		GuestCookieSecure:       true,
-		RedirectOnAuthErrorPath: "/login",
+		cookie:   cookie,
 	}
 }
 

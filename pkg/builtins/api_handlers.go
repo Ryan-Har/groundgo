@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/Ryan-Har/groundgo/api"
 	"github.com/Ryan-Har/groundgo/internal/db"
@@ -71,17 +70,10 @@ func (h *Handler) handleAPITokenRefresh() http.HandlerFunc {
 			return
 		}
 
-		// It's best practice to send the refresh token in a secure, HttpOnly cookie
-		// to protect against XSS, but for simplicity, a JSON response also works.
-		// TODO: Make secure before release
-		http.SetCookie(w, &http.Cookie{
-			Name:     "refresh_token",
-			Value:    tokenPair.RefreshToken,
-			HttpOnly: true,
-			Secure:   false, // Set to true in production
-			//SameSite: http.SameSiteStrictMode,
-			Path: h.apiBaseRoute + "/auth/refresh", // Only send it to the refresh endpoint
-		})
+		if err := h.cookieOpts.SetRefreshTokenCookie(w, tokenPair.RefreshToken, nil); err != nil {
+			h.log.Error("failed to set refresh token cookie", "err", err)
+			return
+		}
 
 		resp := api.TokenResponse{
 			Token:     tokenPair.AccessToken,
@@ -126,17 +118,10 @@ func (h *Handler) handleAPILoginPost() http.HandlerFunc {
 			return
 		}
 
-		// It's best practice to send the refresh token in a secure, HttpOnly cookie
-		// to protect against XSS, but for simplicity, a JSON response also works.
-		// TODO: Make secure before release
-		http.SetCookie(w, &http.Cookie{
-			Name:     "refresh_token",
-			Value:    tokenPair.RefreshToken,
-			HttpOnly: true,
-			Secure:   false, // Set to true in production
-			//SameSite: http.SameSiteStrictMode,
-			Path: h.apiBaseRoute + "/auth/refresh", // Only send it to the refresh endpoint
-		})
+		if err := h.cookieOpts.SetRefreshTokenCookie(w, tokenPair.RefreshToken, nil); err != nil {
+			h.log.Error("failed to set refresh token cookie", "err", err)
+			return
+		}
 
 		resp := api.TokenResponse{
 			Token:     tokenPair.AccessToken,
@@ -170,20 +155,10 @@ func (h *Handler) handleAPILogoutPost() http.HandlerFunc {
 		}
 
 		//overwrite existing refresh cookie so that the current client cannot refresh
-
-		// It's best practice to send the refresh token in a secure, HttpOnly cookie
-		// to protect against XSS, but for simplicity, a JSON response also works.
-		// TODO: Make secure before release
-		http.SetCookie(w, &http.Cookie{
-			Name:     "refresh_token",
-			Value:    "",
-			HttpOnly: true,
-			Secure:   false, // Set to true in production
-			//SameSite: http.SameSiteStrictMode,
-			Path:    h.apiBaseRoute + "/auth/refresh", // Only send it to the refresh endpoint
-			Expires: time.Unix(0, 0),
-			MaxAge:  -1,
-		})
+		if err := h.cookieOpts.ClearRefreshTokenCookie(w); err != nil {
+			h.log.Error("failed to set refresh token cookie", "err", err)
+			return
+		}
 
 		w.WriteHeader(http.StatusNoContent)
 	}

@@ -47,6 +47,14 @@ type User struct {
 	IsActive      bool      `json:"isActive"`
 }
 
+// NewGuestUser creates and returns a new User struct representing a guest.
+func NewGuestUser() *User {
+	return &User{
+		ID:     uuid.Nil,
+		Claims: map[string]Role{"/": RoleGuest},
+	}
+}
+
 // UpdateUserByIDParams is a struct for updating a user
 // Everything is intentionally a pointer to allow for Coalescing at the db level
 type UpdateUserByIDParams struct {
