@@ -26,6 +26,9 @@ type Enforcer struct {
 	session  SessionStore
 	token    TokenStore
 	cookie   CookieStore
+	// APIDetector determines if a request should get API-style responses
+	// Defaults to defaultAPIDetector if not set
+	APIDetector APIRequestDetector
 
 	mu sync.RWMutex // mutex to protect policies and handlers maps
 }
@@ -86,14 +89,15 @@ type CookieStore interface {
 //	enforcer := NewEnforcer(logger, router, authStore, sessionStore, tokenstore, config)
 func NewEnforcer(logger *slog.Logger, router Router, auth AuthStore, sess SessionStore, token TokenStore, cookie CookieStore) *Enforcer {
 	return &Enforcer{
-		log:      logger,
-		Policies: make(map[string]map[string]models.Role),
-		handlers: make(map[string]map[string]http.Handler),
-		router:   router,
-		auth:     auth,
-		session:  sess,
-		token:    token,
-		cookie:   cookie,
+		log:         logger,
+		Policies:    make(map[string]map[string]models.Role),
+		handlers:    make(map[string]map[string]http.Handler),
+		router:      router,
+		auth:        auth,
+		session:     sess,
+		token:       token,
+		cookie:      cookie,
+		APIDetector: defaultAPIDetector,
 	}
 }
 

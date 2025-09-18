@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -293,23 +294,104 @@ func Test_getSessionFromCookie(t *testing.T) {
 	assert.Equal(t, "sess1", cookie.Value)
 }
 
-func Test_isAPIRequest(t *testing.T) {
+func Test_defaultAPIDetector(t *testing.T) {
+	// Should detect API requests with JSON Accept header and API path
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/x", nil)
 	r.Header.Set("Accept", "application/json")
-	assert.True(t, isAPIRequest(r))
+	assert.True(t, defaultAPIDetector(r))
+
+	// Should NOT detect regular web requests
+	r = httptest.NewRequest(http.MethodGet, "/ui", nil)
+	r.Header.Set("Accept", "text/html")
+	assert.False(t, defaultAPIDetector(r))
+
+	// Should detect API request with API path even without JSON accept
+	// (This is different from your old logic - now path alone is enough)
+	r = httptest.NewRequest(http.MethodGet, "/api/v1/x", nil)
+	r.Header.Set("Accept", "text/html")
+	assert.True(t, defaultAPIDetector(r)) // This was False in old test
+
+	// Should detect API request with JSON accept even without API path
+	// (This is different from your old logic - now JSON header alone is enough)
+	r = httptest.NewRequest(http.MethodGet, "/x", nil)
+	r.Header.Set("Accept", "application/json")
+	assert.True(t, defaultAPIDetector(r)) // This was False in old test
+
+	// Additional test cases for the new logic
+
+	// Should detect with JSON Content-Type
+	r = httptest.NewRequest(http.MethodPost, "/some/endpoint", nil)
+	r.Header.Set("Content-Type", "application/json")
+	assert.True(t, defaultAPIDetector(r))
+
+	// Should detect v1 and v2 paths
+	r = httptest.NewRequest(http.MethodGet, "/v1/users", nil)
+	assert.True(t, defaultAPIDetector(r))
+
+	r = httptest.NewRequest(http.MethodGet, "/v2/users", nil)
+	assert.True(t, defaultAPIDetector(r))
+
+	// Should NOT detect non-API paths without JSON headers
+	r = httptest.NewRequest(http.MethodGet, "/some/web/page", nil)
+	r.Header.Set("Accept", "text/html")
+	assert.False(t, defaultAPIDetector(r))
+
+	// Edge case: both conditions present (should definitely be true)
+	r = httptest.NewRequest(http.MethodPost, "/api/v1/users", nil)
+	r.Header.Set("Accept", "application/json")
+	r.Header.Set("Content-Type", "application/json")
+	assert.True(t, defaultAPIDetector(r))
+}
+
+// If you want to keep the old behavior for specific use cases,
+// you can create a separate test for a stricter detector:
+func strictAPIDetector(r *http.Request) bool {
+	// Original logic: requires BOTH conditions
+	acceptHeader := strings.ToLower(r.Header.Get("Accept"))
+	acceptsJSON := strings.Contains(acceptHeader, "application/json")
+
+	path := strings.ToLower(r.URL.Path)
+	pathContainsAPI := strings.HasPrefix(path, "/api/")
+
+	return acceptsJSON && pathContainsAPI
+}
+
+func Test_strictAPIDetector(t *testing.T) {
+	// This matches your original test logic exactly
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/x", nil)
+	r.Header.Set("Accept", "application/json")
+	assert.True(t, strictAPIDetector(r))
 
 	r = httptest.NewRequest(http.MethodGet, "/ui", nil)
 	r.Header.Set("Accept", "text/html")
-	assert.False(t, isAPIRequest(r))
+	assert.False(t, strictAPIDetector(r))
 
 	// must satisfy both
 	r = httptest.NewRequest(http.MethodGet, "/api/v1/x", nil)
 	r.Header.Set("Accept", "text/html")
-	assert.False(t, isAPIRequest(r))
+	assert.False(t, strictAPIDetector(r))
 
 	r = httptest.NewRequest(http.MethodGet, "/x", nil)
 	r.Header.Set("Accept", "application/json")
-	assert.False(t, isAPIRequest(r))
+	assert.False(t, strictAPIDetector(r))
+}
+
+// Test the enforcer's API detector functionality
+func Test_EnforcerAPIDetection(t *testing.T) {
+	// Test with default detector
+	enforcer := newBaseEnforcer()
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/test", nil)
+	r.Header.Set("Accept", "application/json")
+	assert.True(t, enforcer.APIDetector(r))
+
+	// Test with custom detector
+	enforcer = newBaseEnforcer().WithAPIDetector(strictAPIDetector)
+
+	// This should be false with strict detector (no JSON accept header)
+	r = httptest.NewRequest(http.MethodGet, "/api/v1/test", nil)
+	r.Header.Set("Accept", "text/html")
+	assert.False(t, enforcer.APIDetector(r))
 }
 
 //
