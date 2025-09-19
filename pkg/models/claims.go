@@ -10,22 +10,33 @@ import (
 type Claims map[string]Role
 
 // GetEffectiveRole returns the most specific role matching the given resource path.
-// It finds the longest prefix in the Claims map that matches the resource,
-// applying path boundary checks to avoid partial matches (e.g., "/api/" does not match "/api2/").
+//
+// Matching rules:
+//   - The root claim ("/") acts as a catch-all fallback if no more specific claim matches.
+//   - Other claims match when they are a prefix of the resource and respect path boundaries
+//     (e.g., "/api" matches "/api" and "/api/resource" but not "/api2").
+//   - If multiple claims match, the one with the greatest depth (most '/' segments) wins.
+//   - If depths are equal, the longer path string is preferred to break ties.
+//
 // Returns the matched Role and true if found, or an empty Role and false if no match exists.
 func (c Claims) GetEffectiveRole(resource string) (Role, bool) {
 	mostSpecific := ""
 	depth := -1
 
 	for path := range c {
+		if path == "/" {
+			// root is only used as fallback, skip for now
+			continue
+		}
+
 		if strings.HasPrefix(resource, path) {
-			// Ensure the match respects path boundaries (e.g., "/api/" vs "/api2/")
+			// Ensure the match respects path boundaries (e.g., "/api" vs "/api2")
 			if !strings.HasSuffix(path, "/") && len(resource) > len(path) && resource[len(path)] != '/' {
 				continue
 			}
 
 			currentDepth := strings.Count(path, "/")
-			if currentDepth > depth {
+			if currentDepth > depth || (currentDepth == depth && len(path) > len(mostSpecific)) {
 				mostSpecific = path
 				depth = currentDepth
 			}
@@ -34,6 +45,11 @@ func (c Claims) GetEffectiveRole(resource string) (Role, bool) {
 
 	if mostSpecific != "" {
 		return c[mostSpecific], true
+	}
+
+	// fallback to root claim if defined
+	if role, ok := c["/"]; ok {
+		return role, true
 	}
 
 	return "", false
