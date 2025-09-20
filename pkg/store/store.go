@@ -5,10 +5,12 @@ import (
 	"database/sql"
 	"errors"
 	"log/slog"
+	"net/http"
 	"time"
 
 	"github.com/Ryan-Har/groundgo/database"
 	"github.com/Ryan-Har/groundgo/internal/authstore"
+	"github.com/Ryan-Har/groundgo/internal/cookies"
 	"github.com/Ryan-Har/groundgo/internal/logutil"
 	"github.com/Ryan-Har/groundgo/internal/sessionstore"
 	"github.com/Ryan-Har/groundgo/internal/tokenstore"
@@ -187,4 +189,27 @@ type Authstore interface {
 
 	// UpdateUserByID handles updating of a single user
 	UpdateUserByID(ctx context.Context, args models.UpdateUserByIDParams) (*models.User, error)
+}
+
+type CookieStore interface {
+	// UpdateDurations updates the duration configuration at runtime
+	UpdateDurations(durations cookies.DurationConfig)
+	// NewDurationConfig creates a new duration configuration
+	NewDurationConfig(guestSession, refreshToken, userSession, defaultDuration time.Duration) cookies.DurationConfig
+	// GetConfig returns a copy of the current configuration
+	GetConfig() cookies.CookieConfig
+
+	SetCookie(w http.ResponseWriter, opts cookies.CookieOptions) error
+	SetGuestCookie(w http.ResponseWriter, value string, customExpires *time.Time) error
+	SetRefreshTokenCookie(w http.ResponseWriter, value string, customExpires *time.Time) error
+	SetUserSessionCookie(w http.ResponseWriter, value string, customExpires *time.Time) error
+	SetGenericCookie(w http.ResponseWriter, name, value, path string, customExpires *time.Time) error
+	ClearCookie(w http.ResponseWriter, name, path string) error
+	ClearGuestCookie(w http.ResponseWriter) error
+	ClearRefreshTokenCookie(w http.ResponseWriter) error
+	ClearUserSessionCookie(w http.ResponseWriter) error
+	GetCookie(r *http.Request, name string) (string, error)
+	GetGuestCookie(r *http.Request) (string, error)
+	GetRefreshTokenCookie(r *http.Request) (string, error)
+	GetUserSessionCookie(r *http.Request) (string, error)
 }
