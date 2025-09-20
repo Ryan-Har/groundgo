@@ -4,13 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/Ryan-Har/groundgo/database"
 	"github.com/Ryan-Har/groundgo/internal/authstore"
-	"github.com/Ryan-Har/groundgo/internal/cookies"
+	"github.com/Ryan-Har/groundgo/internal/cookiestore"
 	"github.com/Ryan-Har/groundgo/internal/logutil"
 	"github.com/Ryan-Har/groundgo/internal/sessionstore"
 	"github.com/Ryan-Har/groundgo/internal/tokenstore"
@@ -24,6 +25,7 @@ type Store struct {
 	Auth    Authstore
 	Session Sessionstore
 	Token   Tokenstore
+	Cookie  Cookiestore
 	dbType  DBType
 }
 
@@ -35,39 +37,51 @@ const (
 )
 
 // New initializes and returns a Store struct with the appropriate
-// subcomponents (e.g., Auth, Session, Token) based on the provided configuration.
+// subcomponents (e.g., Auth, Session, Token, Cookie) based on the provided configuration.
 // It also runs the database migrations required for the stores.
-//
-// The dbType parameter determines the type of database backend used for storage,
-// and sessionInMemory controls whether session storage is in-memory or not.
-//
-// Params:
-//   - db: a live database connection
-//   - dbType: the type of database (e.g., SQLite, Postgres) used to determine
-//     how to initialize subcomponents like Auth
-//   - logger: a slog.Logger pointer instance used for logging
-//   - sessionInMemory: if true, an in-memory session store is initialized
-//
-// Example:
-//
-//	svc := New(db, DBTypeSQLite, logger, true)
-func New(db *sql.DB, dbType DBType, log *slog.Logger, sessionInMemory bool) (*Store, error) {
-	s := &Store{
-		db:     db,
-		log:    log,
-		dbType: dbType,
+func New(cfg *StoreConfig) (*Store, error) {
+	if cfg == nil {
+		return nil, errors.New("provided config cannot be nil")
+	}
+	if err := cfg.validateAndSetDefaults(); err != nil {
+		return nil, err
 	}
 
-	switch dbType {
+	s := &Store{
+		db:     cfg.DB,
+		log:    cfg.Logger,
+		dbType: cfg.DBType,
+	}
+
+	switch cfg.DBType {
 	case DBTypeSQLite:
 		s.Auth = authstore.NewWithSqliteStore(s.db, s.log)
-		if sessionInMemory {
-			s.Session = sessionstore.NewInMemory(log)
+		if cfg.SessionStoreInMemory {
+			s.Session = sessionstore.NewInMemory(s.log)
 		} else {
-			s.Session = sessionstore.NewSqlite(log, db)
+			s.Session = sessionstore.NewSqlite(s.log, s.db)
 		}
-		s.Token = tokenstore.NewSqlite(log, "tempSecureSigningSecret", time.Minute*15, db)
+		s.Token = tokenstore.NewSqlite(s.log, cfg.JWTSigningSecret, cfg.TokenDuration, s.db)
+	case DBTypePostgres:
+		return nil, errors.New("postgres not yet supported")
+	default:
+		return nil, fmt.Errorf("unsupported DBType: %s", cfg.DBType)
 	}
+
+	if cfg.InsecureMode {
+		s.Cookie = cookiestore.NewManagerWithInsecureDefaults(s.log)
+	} else {
+		s.Cookie = cookiestore.NewManagerWithDefaults(s.log)
+	}
+
+	// override durations with provided durations
+	cookieDurations := cookiestore.NewDurationConfig(
+		cfg.CookiestoreGuestSessionDuration,
+		cfg.RefreshTokenDuration,
+		cfg.SessionDuration,
+		cfg.CookiestoreGenericCookieDuration,
+	)
+	s.Cookie.UpdateDurations(cookieDurations)
 
 	if err := s.runMigrations(); err != nil {
 		return nil, logutil.LogAndWrapErr(s.log, "unable to run migrations", err)
@@ -191,15 +205,13 @@ type Authstore interface {
 	UpdateUserByID(ctx context.Context, args models.UpdateUserByIDParams) (*models.User, error)
 }
 
-type CookieStore interface {
+type Cookiestore interface {
 	// UpdateDurations updates the duration configuration at runtime
-	UpdateDurations(durations cookies.DurationConfig)
-	// NewDurationConfig creates a new duration configuration
-	NewDurationConfig(guestSession, refreshToken, userSession, defaultDuration time.Duration) cookies.DurationConfig
+	UpdateDurations(durations cookiestore.DurationConfig)
 	// GetConfig returns a copy of the current configuration
-	GetConfig() cookies.CookieConfig
+	GetConfig() cookiestore.CookieConfig
 
-	SetCookie(w http.ResponseWriter, opts cookies.CookieOptions) error
+	SetCookie(w http.ResponseWriter, opts cookiestore.CookieOptions) error
 	SetGuestCookie(w http.ResponseWriter, value string, customExpires *time.Time) error
 	SetRefreshTokenCookie(w http.ResponseWriter, value string, customExpires *time.Time) error
 	SetUserSessionCookie(w http.ResponseWriter, value string, customExpires *time.Time) error
@@ -212,4 +224,69 @@ type CookieStore interface {
 	GetGuestCookie(r *http.Request) (string, error)
 	GetRefreshTokenCookie(r *http.Request) (string, error)
 	GetUserSessionCookie(r *http.Request) (string, error)
+}
+
+type StoreConfig struct {
+	// generic store configuration data
+	Logger       *slog.Logger // logger to be injected into stores
+	DB           *sql.DB
+	DBType       DBType // DBType string enum
+	InsecureMode bool   // determines if insecure mode is enabled (default false). Useful for development environments.
+
+	// session store configuration
+	TokenLength          int  // number of bytes used when generating tokens (default 32)
+	SessionStoreInMemory bool // bool to flag if session store should be in memory (default false)
+
+	// auth store configuration
+
+	// token store configuration
+	JWTSigningSecret string        // string used to sign JWT
+	TokenDuration    time.Duration // length of time tokens are valid for (default 30 min)
+
+	// cookie store configuration
+	CookiestoreGuestSessionDuration  time.Duration // length of time a guest session cookie (default 24 hr)
+	CookiestoreGenericCookieDuration time.Duration // length of time generic cookies are valid for (default 1 hr)
+
+	// shared configuration options
+	SessionDuration      time.Duration // length of time tokens are active (default 30 min)
+	RefreshTokenDuration time.Duration // length of time refresh tokens are valid for (default 7 days)
+}
+
+func (c *StoreConfig) validateAndSetDefaults() error {
+	// Required fields
+	if c.Logger == nil {
+		return errors.New("logger must be provided")
+	}
+	if c.DB == nil {
+		return errors.New("DB must be provided")
+	}
+	if c.DBType == "" {
+		return errors.New("DBType must be provided")
+	}
+	if c.JWTSigningSecret == "" {
+		return errors.New("JWTSigningSecret must be provided")
+	}
+
+	// Set defaults for zero values
+	if c.TokenLength == 0 {
+		c.TokenLength = 32
+	}
+	// SessionStoreInMemory defaults to false, no action needed
+	if c.TokenDuration == 0 {
+		c.TokenDuration = 30 * time.Minute
+	}
+	if c.CookiestoreGuestSessionDuration == 0 {
+		c.CookiestoreGuestSessionDuration = 24 * time.Hour
+	}
+	if c.CookiestoreGenericCookieDuration == 0 {
+		c.CookiestoreGenericCookieDuration = 1 * time.Hour
+	}
+	if c.SessionDuration == 0 {
+		c.SessionDuration = 30 * time.Minute
+	}
+	if c.RefreshTokenDuration == 0 {
+		c.RefreshTokenDuration = 7 * 24 * time.Hour
+	}
+
+	return nil
 }

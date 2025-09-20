@@ -2,13 +2,13 @@ package enforcer
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/Ryan-Har/groundgo/internal/cookies"
 	"github.com/Ryan-Har/groundgo/internal/tokenstore"
 	"github.com/Ryan-Har/groundgo/pkg/models"
 	"github.com/google/uuid"
@@ -18,7 +18,10 @@ import (
 // authentication and authorization logic. It is typically used to guard routes
 // based on roles defined in the Policies map.
 type Enforcer struct {
-	log      *slog.Logger
+	log                     *slog.Logger
+	GuestStateEnabled       bool   //determines if guest require state, if not, no session or cookie is provided (default false)
+	RedirectOnAuthErrorPath string // path of the redirection location when authentication fails (default /login)
+
 	Policies map[string]map[string]models.Role  // e.g route: {Get: RoleUser, Post: RoleAdmin}
 	handlers map[string]map[string]http.Handler // path -> method -> handler internal mapping
 	router   Router                             // used for middlewares and creating routes
@@ -63,42 +66,37 @@ type TokenStore interface {
 
 type CookieStore interface {
 	SetGuestCookie(w http.ResponseWriter, value string, customExpires *time.Time) error
-	GetConfig() cookies.CookieConfig
 	ClearUserSessionCookie(w http.ResponseWriter) error
 }
 
-// NewEnforcer initializes and returns a new Enforcer instance.
+// New initializes and returns a new Enforcer instance.
 //
 // The Enforcer manages route access policies and wraps HTTP handlers
 // with authentication and authorization logic. It maintains a mapping of
 // allowed roles per HTTP method and path, and handles enforcement
 // through middleware integration with the provided router.
-//
-// Params:
-//   - logger: a logr.Logger for structured logging
-//   - router: an implementation of the Router interface used to register and manage routes
-//   - auth: an authentication store used to validate user credentials
-//   - sess: a session store used to persist user sessions
-//
-// The Enforcer initializes with:
-//   - An empty Policies map: policies can be added dynamically to control route access
-//   - Internal handler mapping used to wrap and manage protected routes
-//
-// Example:
-//
-//	enforcer := NewEnforcer(logger, router, authStore, sessionStore, tokenstore, config)
-func NewEnforcer(logger *slog.Logger, router Router, auth AuthStore, sess SessionStore, token TokenStore, cookie CookieStore) *Enforcer {
-	return &Enforcer{
-		log:         logger,
-		Policies:    make(map[string]map[string]models.Role),
-		handlers:    make(map[string]map[string]http.Handler),
-		router:      router,
-		auth:        auth,
-		session:     sess,
-		token:       token,
-		cookie:      cookie,
-		APIDetector: defaultAPIDetector,
+func New(cfg *EnforcerConfig) (*Enforcer, error) {
+	if cfg == nil {
+		return nil, errors.New("provided config cannot be nil")
 	}
+	if err := cfg.validateAndSetDefaults(); err != nil {
+		return nil, err
+	}
+	enf := &Enforcer{
+		log:                     cfg.Logger,
+		GuestStateEnabled:       cfg.GuestStateEnabled,
+		RedirectOnAuthErrorPath: cfg.RedirectOnAuthErrorPath,
+		Policies:                make(map[string]map[string]models.Role),
+		handlers:                make(map[string]map[string]http.Handler),
+		router:                  cfg.Router,
+		auth:                    cfg.Auth,
+		session:                 cfg.Session,
+		token:                   cfg.Token,
+		cookie:                  cfg.Cookie,
+		APIDetector:             cfg.APIRequestDetector,
+	}
+
+	return enf, nil
 }
 
 // SetPolicy allows defining the minimum required role for a given resource path and HTTP method.
@@ -188,4 +186,52 @@ func buildPrefixes(path string) []string {
 	prefixes = append(prefixes, "/")
 
 	return prefixes
+}
+
+type EnforcerConfig struct {
+	Logger                  *slog.Logger
+	GuestStateEnabled       bool               //determines if guest require state, if not, no session or cookie is provided (default false)
+	RedirectOnAuthErrorPath string             // path of the redirection location when authentication fails (default /login)
+	APIRequestDetector      APIRequestDetector // optional override for how to determine if a request is an api request
+	Router                  Router             // router interface implementation, usually http.ServeMux
+	Auth                    AuthStore          // authstore interface
+	Session                 SessionStore       // seessionstore interface
+	Token                   TokenStore         // tokenstore interface
+	Cookie                  CookieStore        // cookiestore interface
+}
+
+func (c *EnforcerConfig) validateAndSetDefaults() error {
+	if c.Logger == nil {
+		return errors.New("logger must be provided")
+	}
+
+	if c.RedirectOnAuthErrorPath == "" {
+		c.RedirectOnAuthErrorPath = "/login"
+	}
+
+	if c.Router == nil {
+		return errors.New("router must be provided")
+	}
+
+	if c.Auth == nil {
+		return errors.New("auth store must be provided")
+	}
+
+	if c.Session == nil {
+		return errors.New("session store must be provided")
+	}
+
+	if c.Token == nil {
+		return errors.New("token store must be provided")
+	}
+
+	if c.Cookie == nil {
+		return errors.New("cookie store must be provided")
+	}
+
+	if c.APIRequestDetector == nil {
+		c.APIRequestDetector = defaultAPIDetector
+	}
+
+	return nil
 }

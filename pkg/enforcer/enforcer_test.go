@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/Ryan-Har/groundgo/pkg/models"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -82,16 +83,16 @@ func TestBuildPrefixes(t *testing.T) {
 
 // Additional FindMatchingPolicy tests for HTTP-specific scenarios
 func TestFindMatchingPolicyHTTPScenarios(t *testing.T) {
-	e := NewEnforcer(NoopLogger(), nil, nil, nil, nil, nil)
+	enf, _, _, _, _ := NewEnforcerFromMocks()
 
 	// Setup realistic HTTP route policies
-	e.SetPolicy("/api/v1/users", "GET", models.RoleUser)
-	e.SetPolicy("/api/v1/users", "POST", models.RoleAdmin)
-	e.SetPolicy("/api/v1/users/{id}", "PUT", models.RoleAdmin)
-	e.SetPolicy("/api/v1/users/{id}", "DELETE", models.RoleSystemAdmin)
-	e.SetPolicy("/api/v1", "*", models.RoleUser) // wildcard for API access
-	e.SetPolicy("/public", "*", models.RoleGuest)
-	e.SetPolicy("/", "GET", models.RoleGuest) // public homepage
+	enf.SetPolicy("/api/v1/users", "GET", models.RoleUser)
+	enf.SetPolicy("/api/v1/users", "POST", models.RoleAdmin)
+	enf.SetPolicy("/api/v1/users/{id}", "PUT", models.RoleAdmin)
+	enf.SetPolicy("/api/v1/users/{id}", "DELETE", models.RoleSystemAdmin)
+	enf.SetPolicy("/api/v1", "*", models.RoleUser) // wildcard for API access
+	enf.SetPolicy("/public", "*", models.RoleGuest)
+	enf.SetPolicy("/", "GET", models.RoleGuest) // public homepage
 
 	tests := []struct {
 		name      string
@@ -167,69 +168,112 @@ func TestFindMatchingPolicyHTTPScenarios(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			role, found := e.FindMatchingPolicy(tt.path, tt.method)
+			role, found := enf.FindMatchingPolicy(tt.path, tt.method)
 			require.Equal(t, tt.wantFound, found, "expected found=%v", tt.wantFound)
 			require.Equal(t, tt.wantRole, role, "expected role=%v", tt.wantRole)
 		})
 	}
 }
 
-// Test policy precedence - exact method wins over wildcard on same path
-func TestPolicyPrecedence(t *testing.T) {
-	e := NewEnforcer(NoopLogger(), nil, nil, nil, nil, nil)
+func TestPolicyMatching(t *testing.T) {
+	cases := []struct {
+		name          string
+		setupPolicies func(*Enforcer)
+		path          string
+		method        string
+		expectedFound bool
+		expectedRole  models.Role
+	}{
+		{
+			name: "exact method wins over wildcard",
+			setupPolicies: func(e *Enforcer) {
+				e.SetPolicy("/api/users", "*", models.RoleUser)       // wildcard
+				e.SetPolicy("/api/users", "DELETE", models.RoleAdmin) // exact
+			},
+			path:          "/api/users",
+			method:        "DELETE",
+			expectedFound: true,
+			expectedRole:  models.RoleAdmin,
+		},
+		{
+			name: "wildcard used when exact not found",
+			setupPolicies: func(e *Enforcer) {
+				e.SetPolicy("/api/users", "*", models.RoleUser)
+				e.SetPolicy("/api/users", "DELETE", models.RoleAdmin)
+			},
+			path:          "/api/users",
+			method:        "GET",
+			expectedFound: true,
+			expectedRole:  models.RoleUser,
+		},
+		{
+			name: "child policy isolation from parent",
+			setupPolicies: func(e *Enforcer) {
+				e.SetPolicy("/admin", "*", models.RoleAdmin)
+				e.SetPolicy("/admin/users", "GET", models.RoleUser)
+			},
+			path:          "/admin",
+			method:        "POST",
+			expectedFound: true,
+			expectedRole:  models.RoleAdmin,
+		},
+		{
+			name: "parent policy isolation from child",
+			setupPolicies: func(e *Enforcer) {
+				e.SetPolicy("/admin", "*", models.RoleAdmin)
+				e.SetPolicy("/admin/users", "GET", models.RoleUser)
+			},
+			path:          "/admin/users",
+			method:        "GET",
+			expectedFound: true,
+			expectedRole:  models.RoleUser,
+		},
+		{
+			name: "empty method uses wildcard",
+			setupPolicies: func(e *Enforcer) {
+				e.SetPolicy("/api", "*", models.RoleUser)
+			},
+			path:          "/api",
+			method:        "",
+			expectedFound: true,
+			expectedRole:  models.RoleUser,
+		},
+	}
 
-	// Set up conflicting policies to test precedence
-	e.SetPolicy("/api/users", "*", models.RoleUser)       // wildcard first
-	e.SetPolicy("/api/users", "DELETE", models.RoleAdmin) // specific method second
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			enf, _, _, _, _ := NewEnforcerFromMocks()
+			tc.setupPolicies(enf)
 
-	role, found := e.FindMatchingPolicy("/api/users", "DELETE")
-	require.True(t, found)
-	require.Equal(t, models.RoleAdmin, role, "exact method should win over wildcard")
-
-	role, found = e.FindMatchingPolicy("/api/users", "GET")
-	require.True(t, found)
-	require.Equal(t, models.RoleUser, role, "should fall back to wildcard for other methods")
+			role, found := enf.FindMatchingPolicy(tc.path, tc.method)
+			assert.Equal(t, tc.expectedFound, found)
+			assert.Equal(t, tc.expectedRole, role)
+		})
+	}
 }
 
-// Test that policies don't interfere with each other
-func TestPolicyIsolation(t *testing.T) {
-	e := NewEnforcer(NoopLogger(), nil, nil, nil, nil, nil)
-
-	e.SetPolicy("/admin", "*", models.RoleAdmin)
-	e.SetPolicy("/admin/users", "GET", models.RoleUser) // less restrictive child
-
-	// Child policy should not affect parent
-	role, found := e.FindMatchingPolicy("/admin", "POST")
-	require.True(t, found)
-	require.Equal(t, models.RoleAdmin, role)
-
-	// Parent should not affect child
-	role, found = e.FindMatchingPolicy("/admin/users", "GET")
-	require.True(t, found)
-	require.Equal(t, models.RoleUser, role)
-}
-
-// Test empty method string (edge case)
-func TestEmptyMethod(t *testing.T) {
-	e := NewEnforcer(NoopLogger(), nil, nil, nil, nil, nil)
-	e.SetPolicy("/api", "*", models.RoleUser)
-
-	// Empty method should be converted to uppercase and not match wildcard
-	role, found := e.FindMatchingPolicy("/api", "")
-	require.True(t, found)
-	require.Equal(t, models.RoleUser, role) // should match wildcard
-}
-
-// --- SetPolicy test (sanity check) ---
 func TestSetPolicyStoresUppercaseMethods(t *testing.T) {
-	e := NewEnforcer(NoopLogger(), nil, nil, nil, nil, nil)
-	e.SetPolicy("/some/path", "get", models.RoleAdmin)
-	require.Equal(t, models.RoleAdmin, e.Policies["/some/path"]["GET"])
+	enf, _, _, _, _ := NewEnforcerFromMocks()
+	enf.SetPolicy("/some/path", "get", models.RoleAdmin)
+	require.Equal(t, models.RoleAdmin, enf.Policies["/some/path"]["GET"])
 }
-
 func BenchmarkBuildPrefixes(b *testing.B) {
-	path := "/" + strings.Repeat("a/", 100) + "endpoint"
-	for i := 0; i < b.N; i++ {
-		buildPrefixes(path)
+	cases := []struct {
+		name  string
+		depth int // how many segments in the path
+	}{
+		{"short_path", 5},
+		{"medium_path", 50},
+		{"long_path", 100},
+	}
+
+	for _, tc := range cases {
+		b.Run(tc.name, func(b *testing.B) {
+			path := "/" + strings.Repeat("a/", tc.depth) + "endpoint"
+			b.ResetTimer() // ensure setup is not counted in benchmark
+			for i := 0; i < b.N; i++ {
+				buildPrefixes(path)
+			}
+		})
 	}
 }

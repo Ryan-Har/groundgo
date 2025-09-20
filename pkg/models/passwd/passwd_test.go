@@ -1,7 +1,6 @@
 package passwd
 
 import (
-	"errors"
 	"strings"
 	"testing"
 
@@ -9,126 +8,150 @@ import (
 )
 
 func TestHashPassword(t *testing.T) {
-	// Test case 1: Valid password
-	password := "mysecretpassword"
-	hashedPassword, err := HashPassword(password)
-	if err != nil {
-		t.Fatalf("HashPassword returned an error for valid password: %v", err)
-	}
-	if hashedPassword == "" {
-		t.Error("HashPassword returned an empty string for valid password")
-	}
-
-	// Verify the hash (we can't decrypt, but we can check if it's a valid bcrypt hash)
-	err = bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
-	if err != nil {
-		t.Errorf("Hashed password does not match original password: %v", err)
+	tests := []struct {
+		name        string
+		password    string
+		expectError bool
+	}{
+		{"Valid password", "mysecretpassword", false},
+		{"Password exceeding MaxPasswordLen", strings.Repeat("a", MaxPasswordLen+1), true},
+		{"Empty password", "", false},
 	}
 
-	// Test case 2: Password exceeding MaxPasswordLen
-	longPassword := strings.Repeat("a", MaxPasswordLen+1) // 73 characters
-	_, err = HashPassword(longPassword)
-	if err == nil {
-		t.Error("HashPassword did not return an error for overly long password")
-	}
-	expectedErr := errors.New("password exceeds 72 bytes and will be truncated by bcrypt")
-	if err.Error() != expectedErr.Error() {
-		t.Errorf("Expected error '%v', got '%v' for overly long password", expectedErr, err)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hashed, err := HashPassword(tt.password)
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if hashed == "" {
+				t.Error("hashed password is empty")
+			}
 
-	// Test case 3: Empty password (bcrypt handles this)
-	emptyPassword := ""
-	hashedEmptyPassword, err := HashPassword(emptyPassword)
-	if err != nil {
-		t.Fatalf("HashPassword returned an error for empty password: %v", err)
-	}
-	if hashedEmptyPassword == "" {
-		t.Error("HashPassword returned an empty string for empty password")
-	}
-	err = bcrypt.CompareHashAndPassword([]byte(hashedEmptyPassword), []byte(emptyPassword))
-	if err != nil {
-		t.Errorf("Hashed empty password does not match original empty password: %v", err)
+			// Validate the hash
+			if bcrypt.CompareHashAndPassword([]byte(hashed), []byte(tt.password)) != nil {
+				t.Errorf("hashed password does not match original")
+			}
+		})
 	}
 }
 
 func TestCheckPasswordHash(t *testing.T) {
 	password := "testpassword123"
-	// Generate a valid hash for testing
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		t.Fatalf("Failed to generate bcrypt hash for testing: %v", err)
+	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hashedEmptyPassword, _ := bcrypt.GenerateFromPassword([]byte(""), bcrypt.DefaultCost)
+
+	tests := []struct {
+		name     string
+		password string
+		hash     string
+		expected bool
+	}{
+		{"Correct password", password, string(hashedPassword), true},
+		{"Incorrect password", "wrongpassword", string(hashedPassword), false},
+		{"Empty password with empty hash", "", string(hashedEmptyPassword), true},
+		{"Empty password with non-empty hash", "", string(hashedPassword), false},
+		{"Invalid hash format", password, "thisisnotavalidhash", false},
 	}
 
-	// Test case 1: Correct password and hash
-	if !CheckPasswordHash(password, string(hashedPassword)) {
-		t.Error("CheckPasswordHash returned false for correct password and hash")
-	}
-
-	// Test case 2: Incorrect password
-	incorrectPassword := "wrongpassword"
-	if CheckPasswordHash(incorrectPassword, string(hashedPassword)) {
-		t.Error("CheckPasswordHash returned true for incorrect password")
-	}
-
-	// Test case 3: Empty password and hash
-	emptyPassword := ""
-	hashedEmptyPassword, err := bcrypt.GenerateFromPassword([]byte(emptyPassword), bcrypt.DefaultCost)
-	if err != nil {
-		t.Fatalf("Failed to generate bcrypt hash for empty password for testing: %v", err)
-	}
-	if !CheckPasswordHash(emptyPassword, string(hashedEmptyPassword)) {
-		t.Error("CheckPasswordHash returned false for empty password and hash")
-	}
-
-	// Test case 4: Empty password with non-empty hash (should fail)
-	if CheckPasswordHash(emptyPassword, string(hashedPassword)) {
-		t.Error("CheckPasswordHash returned true for empty password and non-empty hash")
-	}
-
-	// Test case 5: Invalid hash format (should fail)
-	invalidHash := "thisisnotavalidhash"
-	if CheckPasswordHash(password, invalidHash) {
-		t.Error("CheckPasswordHash returned true for invalid hash format")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := CheckPasswordHash(tt.password, tt.hash)
+			if got != tt.expected {
+				t.Errorf("CheckPasswordHash(%q, %q) = %v, want %v", tt.password, tt.hash, got, tt.expected)
+			}
+		})
 	}
 }
 
 func TestAuthenticate(t *testing.T) {
 	password := "securestring"
-	// Generate a valid hash for testing
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		t.Fatalf("Failed to generate bcrypt hash for testing: %v", err)
+	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hashedEmptyPassword, _ := bcrypt.GenerateFromPassword([]byte(""), bcrypt.DefaultCost)
+
+	tests := []struct {
+		name           string
+		inputPassword  string
+		storedHash     string
+		expectedResult bool
+	}{
+		{"Correct password", password, string(hashedPassword), true},
+		{"Incorrect password", "incorrect", string(hashedPassword), false},
+		{"Empty password and hash", "", string(hashedEmptyPassword), true},
+		{"Empty input password, non-empty hash", "", string(hashedPassword), false},
+		{"Valid password with invalid stored hash", password, "malformedhash", false},
 	}
 
-	// Test case 1: Correct password and hash
-	if !Authenticate(password, string(hashedPassword)) {
-		t.Error("Authenticate returned false for correct input and stored hash")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := Authenticate(tt.inputPassword, tt.storedHash)
+			if got != tt.expectedResult {
+				t.Errorf("Authenticate(%q, %q) = %v, want %v", tt.inputPassword, tt.storedHash, got, tt.expectedResult)
+			}
+		})
+	}
+}
+
+func TestIsHashed(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected bool
+	}{
+		{
+			name:     "Valid $2a$ hash",
+			input:    "$2a$12$" + strings.Repeat("a", 53), // 60 chars
+			expected: true,
+		},
+		{
+			name:     "Valid $2b$ hash",
+			input:    "$2b$12$" + strings.Repeat("a", 53),
+			expected: true,
+		},
+		{
+			name:     "Valid $2y$ hash",
+			input:    "$2y$12$" + strings.Repeat("a", 53),
+			expected: true,
+		},
+		{
+			name:     "Invalid prefix",
+			input:    "$2x$12$" + strings.Repeat("a", 53),
+			expected: false,
+		},
+		{
+			name:     "Too short",
+			input:    "$2a$12$short",
+			expected: false,
+		},
+		{
+			name:     "Too long",
+			input:    "$2a$12$" + strings.Repeat("a", 100),
+			expected: false,
+		},
+		{
+			name:     "Empty string",
+			input:    "",
+			expected: false,
+		},
+		{
+			name:     "Random string 60 chars",
+			input:    strings.Repeat("x", 60),
+			expected: false,
+		},
 	}
 
-	// Test case 2: Incorrect password
-	incorrectPassword := "incorrect"
-	if Authenticate(incorrectPassword, string(hashedPassword)) {
-		t.Error("Authenticate returned true for incorrect input password")
-	}
-
-	// Test case 3: Empty password and hash (should pass if both are empty and valid bcrypt)
-	emptyPassword := ""
-	hashedEmptyPassword, err := bcrypt.GenerateFromPassword([]byte(emptyPassword), bcrypt.DefaultCost)
-	if err != nil {
-		t.Fatalf("Failed to generate bcrypt hash for empty password for testing: %v", err)
-	}
-	if !Authenticate(emptyPassword, string(hashedEmptyPassword)) {
-		t.Error("Authenticate returned false for empty password and hash")
-	}
-
-	// Test case 4: Empty input password with non-empty stored hash (should fail)
-	if Authenticate(emptyPassword, string(hashedPassword)) {
-		t.Error("Authenticate returned true for empty input password and non-empty stored hash")
-	}
-
-	// Test case 5: Valid input password with invalid stored hash (should fail)
-	invalidHash := "malformedhash"
-	if Authenticate(password, invalidHash) {
-		t.Error("Authenticate returned true for valid input password and invalid stored hash")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := IsHashed(tt.input)
+			if got != tt.expected {
+				t.Errorf("IsHashed(%q) = %v, want %v", tt.input, got, tt.expected)
+			}
+		})
 	}
 }

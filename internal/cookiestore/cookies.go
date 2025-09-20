@@ -1,4 +1,4 @@
-package cookies
+package cookiestore
 
 import (
 	"fmt"
@@ -18,14 +18,12 @@ type DurationConfig struct {
 // CookieConfig holds the configuration for different cookie types
 type CookieConfig struct {
 	// Guest token specific config
-	GuestStateEnabled bool   // determines if guests require state, if not, no cookie is provided
 	GuestCookieName   string // string used for the session cookie of guest user
 	GuestCookieSecure bool   // determines if the cookie should be secure or not. Recommended always to be true in production environments
 	GuestCookiePath   string // path set for the session cookie of the guest user
 
-	RedirectOnAuthErrorPath string // path of the redirection location when authentication fails
-	HttpOnly                bool
-	SameSite                http.SameSite
+	HttpOnly bool
+	SameSite http.SameSite
 
 	// Refresh token specific config
 	RefreshTokenCookieName string
@@ -339,14 +337,12 @@ func (m *Manager) GetConfig() CookieConfig {
 // newDefaultConfig returns a pointer to CookieConfig with the default options
 func newDefaultConfig() *CookieConfig {
 	return &CookieConfig{
-		GuestStateEnabled: true,
 		GuestCookieName:   "session_token",
 		GuestCookieSecure: true,
 		GuestCookiePath:   "/",
 
-		RedirectOnAuthErrorPath: "/login",
-		HttpOnly:                true,
-		SameSite:                http.SameSiteLaxMode,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
 
 		RefreshTokenCookieName: "refresh_token",
 		RefreshTokenPath:       "", // Will be constructed from APIBaseRoute if empty
@@ -368,10 +364,10 @@ func newDefaultConfig() *CookieConfig {
 		Domain:                "", // Empty means current domain only
 
 		Durations: DurationConfig{
-			GuestSessionDuration:  24 * time.Hour,     // 24 hours for guest sessions
-			RefreshTokenDuration:  7 * 24 * time.Hour, // 7 days for refresh tokens
-			UserSessionDuration:   30 * time.Minute,   // 15 minutes for access tokens
-			DefaultCookieDuration: 1 * time.Hour,      // 1 hour for generic cookies
+			GuestSessionDuration:  24 * time.Hour,
+			RefreshTokenDuration:  7 * 24 * time.Hour,
+			UserSessionDuration:   30 * time.Minute,
+			DefaultCookieDuration: 1 * time.Hour,
 		},
 	}
 }
@@ -380,14 +376,12 @@ func newDefaultConfig() *CookieConfig {
 // It is intended to be used only in a development environment.
 func newInsecureDefaultConfig() *CookieConfig {
 	return &CookieConfig{
-		GuestStateEnabled: true,
 		GuestCookieName:   "session_token",
 		GuestCookieSecure: false,
 		GuestCookiePath:   "/",
 
-		RedirectOnAuthErrorPath: "/login",
-		HttpOnly:                false,
-		SameSite:                http.SameSiteLaxMode,
+		HttpOnly: false,
+		SameSite: http.SameSiteLaxMode,
 
 		RefreshTokenCookieName: "refresh_token",
 		RefreshTokenPath:       "",
@@ -411,7 +405,7 @@ func newInsecureDefaultConfig() *CookieConfig {
 		Durations: DurationConfig{
 			GuestSessionDuration:  24 * time.Hour,
 			RefreshTokenDuration:  7 * 24 * time.Hour,
-			UserSessionDuration:   1 * time.Hour,
+			UserSessionDuration:   30 * time.Minute,
 			DefaultCookieDuration: 1 * time.Hour,
 		},
 	}

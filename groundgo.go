@@ -5,24 +5,24 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/Ryan-Har/groundgo/internal/cookies"
 	"github.com/Ryan-Har/groundgo/pkg/builtins"
 	"github.com/Ryan-Har/groundgo/pkg/enforcer"
 	"github.com/Ryan-Har/groundgo/pkg/store"
 )
 
 type GroundGo struct {
-	logger   *slog.Logger
-	config   *Config
-	Store    *store.Store
-	Enforcer *enforcer.Enforcer
-	Builtin  *builtins.Builtin
+	logger   *slog.Logger       // slog logger used for internal logging purposes
+	Store    *store.Store       // stores available to use (Auth, Session, Token, Cookie)
+	Enforcer *enforcer.Enforcer // enforcer handled authentication and authorisation
+	Builtin  *builtins.Builtin  // builtin components ready for use
+
+	config *Config
 
 	// Hold information to initialize services after configuration
-	db               *sql.DB
-	dbType           store.DBType
-	router           enforcer.Router
-	sessionsInMemory bool // detertmines if the session store is held in memory only
+	db               *sql.DB         // db instance used for persistance
+	dbType           store.DBType    // enum indicating type of db
+	router           enforcer.Router // router interface required for enforcer.
+	sessionsInMemory bool            // detertmines if the session store is held in memory only
 }
 
 type Option func(*GroundGo)
@@ -69,32 +69,47 @@ func New(opts ...Option) (*GroundGo, error) {
 	}
 	gg.logger.Info("successfully connected to database")
 
+	gg.config = &Config{
+		StoreConfig: store.StoreConfig{
+			Logger:           gg.logger,
+			DB:               gg.db,
+			DBType:           gg.dbType,
+			InsecureMode:     true,
+			JWTSigningSecret: "tempsigningsecret",
+		},
+	}
+
 	// load stores now that logging is set
-	stores, err := store.New(gg.db, gg.dbType, gg.logger, gg.sessionsInMemory)
+	stores, err := store.New(&gg.config.StoreConfig)
 	if err != nil {
 		return nil, err
 	}
-	gg.logger.Info("groundgo stores loaded")
 	gg.Store = stores
+	gg.logger.Info("groundgo stores loaded")
 
-	//cookieStore := cookies.NewManagerWithInsecureDefaults(gg.logger)
-	cookieStore := cookies.NewManagerWithDefaults(gg.logger)
-	gg.Enforcer = enforcer.NewEnforcer(gg.logger, gg.router, gg.Store.Auth, gg.Store.Session, gg.Store.Token, cookieStore)
+	gg.config.EnforcerConfig = enforcer.EnforcerConfig{
+		Logger:  gg.logger,
+		Router:  gg.router,
+		Auth:    gg.Store.Auth,
+		Session: gg.Store.Session,
+		Token:   gg.Store.Token,
+		Cookie:  gg.Store.Cookie,
+	}
+
+	enf, err := enforcer.New(&gg.config.EnforcerConfig)
+	if err != nil {
+		return nil, err
+	}
+	gg.Enforcer = enf
 	gg.logger.Info("groundgo enforcer loaded")
 
-	gg.Builtin = builtins.New(gg.logger, gg.Enforcer, gg.Store.Auth, gg.Store.Session, gg.Store.Token, cookieStore)
+	gg.Builtin = builtins.New(gg.logger, gg.Enforcer, gg.Store.Auth, gg.Store.Session, gg.Store.Token, gg.Store.Cookie)
 	gg.logger.Info("groundgo builtins loaded")
 
-	gg.logger.Info("groundgo enforcer loaded")
 	return gg, nil
 }
 
 type Config struct {
-	//AllowSignup bool
-	//SessionSecret string
-	//JWTSecret string
-	//TokenTTL time.Duration
-	//CustomClaims map[string]any
-
-	IncludeLoginSignupPages bool
+	store.StoreConfig
+	enforcer.EnforcerConfig
 }

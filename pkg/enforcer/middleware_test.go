@@ -3,652 +3,567 @@ package enforcer
 import (
 	"context"
 	"errors"
-	"io"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
-	"time"
 
-	"github.com/Ryan-Har/groundgo/internal/cookies"
 	"github.com/Ryan-Har/groundgo/internal/sessionstore"
 	"github.com/Ryan-Har/groundgo/internal/tokenstore"
 	"github.com/Ryan-Har/groundgo/pkg/models"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
-//
-// ---------- fakes for dependencies (no external mocking lib required) ----------
-//
-
-// NoopLogger returns a logger that discards all log messages.
-func NoopLogger() *slog.Logger {
-	return slog.New(slog.NewJSONHandler(io.Discard, nil))
-}
-
-type fakeSessionStore struct {
-	getFn    func(ctx context.Context, id string) (*models.Session, error)
-	createFn func(ctx context.Context, uid uuid.UUID) (*models.Session, error)
-	expireFn func(cookie *http.Cookie, w http.ResponseWriter)
-}
-
-func (f *fakeSessionStore) Get(ctx context.Context, id string) (*models.Session, error) {
-	return f.getFn(ctx, id)
-}
-func (f *fakeSessionStore) Create(ctx context.Context, uid uuid.UUID) (*models.Session, error) {
-	return f.createFn(ctx, uid)
-}
-func (f *fakeSessionStore) ExpireCookie(cookie *http.Cookie, w http.ResponseWriter) {
-	if f.expireFn != nil {
-		f.expireFn(cookie, w)
-	}
-}
-
-type fakeAuth struct {
-	getUserFn func(ctx context.Context, id uuid.UUID) (*models.User, error)
-}
-
-func (f *fakeAuth) GetUserByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
-	return f.getUserFn(ctx, id)
-}
-
-type fakeToken struct {
-	parseFn func(ctx context.Context, token string) (*tokenstore.AccessToken, error)
-}
-
-func (f *fakeToken) ParseAccessTokenAndValidate(ctx context.Context, token string) (*tokenstore.AccessToken, error) {
-	return f.parseFn(ctx, token)
-}
-
-//
-// ---------- helpers ----------
-//
-
-func newBaseEnforcer() *Enforcer {
-	session := &fakeSessionStore{
-		getFn: func(ctx context.Context, id string) (*models.Session, error) {
-			// default: guest session exists
-			return &models.Session{
-				ID:        id,
-				UserID:    uuid.Nil,
-				ExpiresAt: time.Now().Add(30 * time.Minute),
-			}, nil
-		},
-		createFn: func(ctx context.Context, uid uuid.UUID) (*models.Session, error) {
-			return &models.Session{
-				ID:        "created-session",
-				UserID:    uid,
-				ExpiresAt: time.Now().Add(30 * time.Minute),
-			}, nil
-		},
-		expireFn: func(cookie *http.Cookie, w http.ResponseWriter) {},
-	}
-	auth := &fakeAuth{
-		getUserFn: func(ctx context.Context, id uuid.UUID) (*models.User, error) {
-			return &models.User{
-				ID:       id,
-				IsActive: true,
-				// keep simple baseline claims
-				Claims: map[string]models.Role{"/": models.RoleUser},
-			}, nil
-		},
-	}
-	token := &fakeToken{
-		parseFn: func(ctx context.Context, token string) (*tokenstore.AccessToken, error) {
-			return nil, errors.New("invalid") // default: invalid so JWT path is off unless overridden
-		},
-	}
-
-	router := http.NewServeMux()
-
-	// Use the helper func to create a real cookie manager
-	cookieManager := cookies.NewManagerWithInsecureDefaults(NoopLogger())
-
-	return NewEnforcer(NoopLogger(), router, auth, session, token, cookieManager)
-}
-
-func nextHandlerCaptureUserAndJWT(t *testing.T, gotUser **models.User, gotJWT *string) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user, ok := r.Context().Value(userContextKey).(*models.User)
-		require.True(t, ok, "user missing from context")
-		*gotUser = user
-
-		if s, ok := r.Context().Value(jwtContextKey).(string); ok {
-			*gotJWT = s
-		}
-		w.WriteHeader(http.StatusOK)
-	})
-}
-
-//
-// ---------- tests for helpers ----------
-//
-
 func Test_extractBearerToken(t *testing.T) {
-	e := newBaseEnforcer()
+	enf, _, _, _, _ := NewEnforcerFromMocks()
 
 	// valid (case-insensitive "Bearer")
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("Authorization", "Bearer abc123")
-	tok, err := e.extractBearerToken(req)
+	tok, err := enf.extractBearerToken(req)
 	require.NoError(t, err)
 	assert.Equal(t, "abc123", tok)
 
 	req.Header.Set("Authorization", "bearer xyz")
-	tok, err = e.extractBearerToken(req)
+	tok, err = enf.extractBearerToken(req)
 	require.NoError(t, err)
 	assert.Equal(t, "xyz", tok)
 
 	// invalid format
 	req.Header.Set("Authorization", "Token abc")
-	_, err = e.extractBearerToken(req)
+	_, err = enf.extractBearerToken(req)
 	assert.Error(t, err)
 
 	// empty token
 	req.Header.Set("Authorization", "Bearer ")
-	_, err = e.extractBearerToken(req)
+	_, err = enf.extractBearerToken(req)
 	assert.Error(t, err)
 
 	// missing header
 	req.Header.Del("Authorization")
-	_, err = e.extractBearerToken(req)
+	_, err = enf.extractBearerToken(req)
 	assert.Error(t, err)
 }
 
 func Test_validateTokenAndGetUser(t *testing.T) {
-	e := newBaseEnforcer()
+	cases := []struct {
+		name        string
+		setupMocks  func(auth *AuthStoreMock, token *TokenStoreMock)
+		tokenString string
+		expectError bool
+		expectUser  bool
+	}{
+		{
+			name: "success path",
+			setupMocks: func(auth *AuthStoreMock, token *TokenStoreMock) {
+				uid := uuid.New()
 
-	// success path
-	uid := uuid.New()
-	e.token = &fakeToken{
-		parseFn: func(ctx context.Context, s string) (*tokenstore.AccessToken, error) {
-			return &tokenstore.AccessToken{
-				RegisteredClaims: jwt.RegisteredClaims{
-					Subject: uid.String(),
-				},
-			}, nil
+				token.On("ParseAccessTokenAndValidate", mock.Anything, "good").
+					Return(&tokenstore.AccessToken{
+						RegisteredClaims: jwt.RegisteredClaims{
+							Subject: uid.String(),
+						},
+					}, nil)
+
+				auth.On("GetUserByID", mock.Anything, uid).
+					Return(&models.User{ID: uid, IsActive: true}, nil)
+			},
+			tokenString: "good",
+			expectError: false,
+			expectUser:  true,
+		},
+		{
+			name: "parse error",
+			setupMocks: func(auth *AuthStoreMock, token *TokenStoreMock) {
+				token.On("ParseAccessTokenAndValidate", mock.Anything, "bad").
+					Return(nil, errors.New("parse fail"))
+			},
+			tokenString: "bad",
+			expectError: true,
+			expectUser:  false,
+		},
+		{
+			name: "bad uuid in subject",
+			setupMocks: func(auth *AuthStoreMock, token *TokenStoreMock) {
+				token.On("ParseAccessTokenAndValidate", mock.Anything, "oops").
+					Return(&tokenstore.AccessToken{
+						RegisteredClaims: jwt.RegisteredClaims{
+							Subject: "not-a-uuid",
+						},
+					}, nil)
+			},
+			tokenString: "oops",
+			expectError: true,
+			expectUser:  false,
+		},
+		{
+			name: "user lookup error",
+			setupMocks: func(auth *AuthStoreMock, token *TokenStoreMock) {
+				uid := uuid.New()
+
+				token.On("ParseAccessTokenAndValidate", mock.Anything, "good2").
+					Return(&tokenstore.AccessToken{
+						RegisteredClaims: jwt.RegisteredClaims{
+							Subject: uid.String(),
+						},
+					}, nil)
+
+				auth.On("GetUserByID", mock.Anything, uid).
+					Return(nil, errors.New("db fail"))
+			},
+			tokenString: "good2",
+			expectError: true,
+			expectUser:  false,
 		},
 	}
-	e.auth = &fakeAuth{getUserFn: func(ctx context.Context, id uuid.UUID) (*models.User, error) {
-		return &models.User{ID: id, IsActive: true}, nil
-	}}
-	user, err := e.validateTokenAndGetUser(context.Background(), "good")
-	require.NoError(t, err)
-	assert.Equal(t, uid, user.ID)
 
-	// parse error
-	e.token = &fakeToken{
-		parseFn: func(ctx context.Context, s string) (*tokenstore.AccessToken, error) {
-			return nil, errors.New("parse fail")
-		},
-	}
-	_, err = e.validateTokenAndGetUser(context.Background(), "bad")
-	assert.Error(t, err)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			enf, auth, _, token, _ := NewEnforcerFromMocks()
+			tc.setupMocks(auth, token)
 
-	// bad UUID in subject
-	e.token = &fakeToken{
-		parseFn: func(ctx context.Context, s string) (*tokenstore.AccessToken, error) {
-			return &tokenstore.AccessToken{
-				RegisteredClaims: jwt.RegisteredClaims{
-					Subject: "not-a-uuid",
-				},
-			}, nil
-		},
-	}
-	_, err = e.validateTokenAndGetUser(context.Background(), "oops")
-	assert.Error(t, err)
+			user, err := enf.validateTokenAndGetUser(context.Background(), tc.tokenString)
 
-	// user lookup error
-	e.token = &fakeToken{
-		parseFn: func(ctx context.Context, s string) (*tokenstore.AccessToken, error) {
-			return &tokenstore.AccessToken{
-				RegisteredClaims: jwt.RegisteredClaims{
-					Subject: uid.String(),
-				},
-			}, nil
-		},
+			if tc.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			if tc.expectUser {
+				assert.NotNil(t, user)
+			} else {
+				assert.Nil(t, user)
+			}
+
+			auth.AssertExpectations(t)
+			token.AssertExpectations(t)
+		})
 	}
-	e.auth = &fakeAuth{getUserFn: func(ctx context.Context, id uuid.UUID) (*models.User, error) {
-		return nil, errors.New("db fail")
-	}}
-	_, err = e.validateTokenAndGetUser(context.Background(), "good2")
-	assert.Error(t, err)
 }
 
 func Test_getUserFromSession(t *testing.T) {
-	e := newBaseEnforcer()
-
-	// guest session -> returns guest user
-	guest, err := e.getUserFromSession(context.Background(),
-		&models.Session{UserID: uuid.Nil},
-		httptest.NewRecorder(),
-		httptest.NewRequest(http.MethodGet, "/", nil),
-	)
-	require.NoError(t, err)
-	assert.Equal(t, uuid.Nil, guest.ID)
-	assert.Equal(t, models.RoleGuest, guest.Claims["/"])
-
-	// active user session
-	uid := uuid.New()
-	u, err := e.getUserFromSession(context.Background(),
-		&models.Session{UserID: uid},
-		httptest.NewRecorder(),
-		httptest.NewRequest(http.MethodGet, "/", nil),
-	)
-	require.NoError(t, err)
-	assert.Equal(t, uid, u.ID)
-
-	// unknown/inactive user -> cookie expired + redirect + error
-	e.auth = &fakeAuth{
-		getUserFn: func(ctx context.Context, id uuid.UUID) (*models.User, error) {
-			return &models.User{ID: id, IsActive: false}, nil
+	cases := []struct {
+		name           string
+		session        *models.Session
+		setupMocks     func(auth *AuthStoreMock, cookie *CookieStoreMock, uid uuid.UUID)
+		expectedError  bool
+		expectedRole   models.Role
+		expectedStatus int
+	}{
+		{
+			name:    "guest session returns guest user",
+			session: &models.Session{UserID: uuid.Nil},
+			setupMocks: func(auth *AuthStoreMock, cookie *CookieStoreMock, uid uuid.UUID) {
+				// no mocks needed for guest
+			},
+			expectedError:  false,
+			expectedRole:   models.RoleGuest,
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:    "active user session",
+			session: &models.Session{UserID: uuid.New()},
+			setupMocks: func(auth *AuthStoreMock, cookie *CookieStoreMock, uid uuid.UUID) {
+				auth.On("GetUserByID", mock.Anything, uid).
+					Return(&models.User{ID: uid, IsActive: true}, nil)
+			},
+			expectedError:  false,
+			expectedRole:   "", // normal user has no forced role
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:    "inactive user causes redirect",
+			session: &models.Session{UserID: uuid.New()},
+			setupMocks: func(auth *AuthStoreMock, cookie *CookieStoreMock, uid uuid.UUID) {
+				auth.On("GetUserByID", mock.Anything, uid).
+					Return(&models.User{ID: uid, IsActive: false}, nil)
+				cookie.On("ClearUserSessionCookie", mock.Anything).Return(nil)
+			},
+			expectedError:  true,
+			expectedRole:   "",
+			expectedStatus: http.StatusSeeOther,
 		},
 	}
-	w := httptest.NewRecorder()
-	_, err = e.getUserFromSession(context.Background(),
-		&models.Session{UserID: uuid.New()},
-		w,
-		httptest.NewRequest(http.MethodGet, "/", nil),
-	)
-	assert.Error(t, err)
-	assert.Equal(t, http.StatusSeeOther, w.Result().StatusCode)
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			enf, auth, _, _, cookie := NewEnforcerFromMocks()
+			w := httptest.NewRecorder()
+			r := httptest.NewRequest(http.MethodGet, "/", nil)
+
+			uid := tc.session.UserID
+			tc.setupMocks(auth, cookie, uid)
+
+			user, err := enf.getUserFromSession(context.Background(), tc.session, w, r)
+
+			if tc.expectedError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			if tc.expectedRole != "" {
+				assert.Equal(t, tc.expectedRole, user.Claims["/"])
+			}
+
+			if tc.expectedStatus != http.StatusOK {
+				assert.Equal(t, tc.expectedStatus, w.Result().StatusCode)
+			}
+
+			auth.AssertExpectations(t)
+			cookie.AssertExpectations(t)
+		})
+	}
 }
 
 func Test_handleSessionError(t *testing.T) {
-	e := newBaseEnforcer()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	c := &http.Cookie{Name: "session_token", Value: "zzz"}
+	cases := []struct {
+		name           string
+		err            error
+		expectedStatus int
+	}{
+		{
+			name:           "expired session returns 303 See Other",
+			err:            sessionstore.ErrSessionExpired,
+			expectedStatus: http.StatusSeeOther,
+		},
+		{
+			name:           "unknown error returns 500",
+			err:            errors.New("boom"),
+			expectedStatus: http.StatusInternalServerError,
+		},
+	}
 
-	// expired -> 303 See Other
-	w := httptest.NewRecorder()
-	e.handleSessionError(sessionstore.ErrSessionExpired, c, w, req)
-	assert.Equal(t, http.StatusSeeOther, w.Result().StatusCode)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			enf, _, _, _, cookie := NewEnforcerFromMocks() // grab cookie mock
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			c := &http.Cookie{Name: "session_token", Value: "zzz"}
+			w := httptest.NewRecorder()
 
-	// unknown -> 500 redirect
-	w = httptest.NewRecorder()
-	e.handleSessionError(errors.New("boom"), c, w, req)
-	assert.Equal(t, http.StatusInternalServerError, w.Result().StatusCode)
+			// configure mock so ClearUserSessionCookie won't panic
+			cookie.On("ClearUserSessionCookie", mock.Anything).Return(nil).Maybe()
+
+			enf.handleSessionError(tc.err, c, w, req)
+
+			assert.Equal(t, tc.expectedStatus, w.Result().StatusCode)
+			cookie.AssertExpectations(t)
+		})
+	}
 }
 
 func Test_getSessionFromCookie(t *testing.T) {
-	e := newBaseEnforcer()
+	cases := []struct {
+		name          string
+		setupRequest  func() *http.Request
+		expectedError bool
+		expectedValue string
+	}{
+		{
+			name: "missing cookie",
+			setupRequest: func() *http.Request {
+				return httptest.NewRequest(http.MethodGet, "/", nil)
+			},
+			expectedError: true,
+			expectedValue: "",
+		},
+		{
+			name: "with cookie returns session",
+			setupRequest: func() *http.Request {
+				req := httptest.NewRequest(http.MethodGet, "/", nil)
+				req.AddCookie(&http.Cookie{Name: "session_token", Value: "sess1"})
+				return req
+			},
+			expectedError: false,
+			expectedValue: "sess1",
+		},
+	}
 
-	// missing cookie
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	sess, cookie, err := e.getSessionFromCookie(req)
-	assert.Nil(t, sess)
-	assert.Nil(t, cookie)
-	assert.Error(t, err)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			enf, _, sessionMock, _, _ := NewEnforcerFromMocks()
+			req := tc.setupRequest()
 
-	// with cookie -> returns session
-	req = httptest.NewRequest(http.MethodGet, "/", nil)
-	req.AddCookie(&http.Cookie{Name: "session_token", Value: "sess1"})
-	sess, cookie, err = e.getSessionFromCookie(req)
-	require.NoError(t, err)
-	require.NotNil(t, sess)
-	require.NotNil(t, cookie)
-	assert.Equal(t, "sess1", cookie.Value)
+			// Only set up the mock if the test case actually has a cookie
+			for _, c := range req.Cookies() {
+				if c.Name == "session_token" {
+					sessionMock.On("Get", mock.Anything, c.Value).
+						Return(&models.Session{ID: c.Value, UserID: uuid.New()}, nil)
+				}
+			}
+
+			sess, cookie, err := enf.getSessionFromCookie(req)
+
+			if tc.expectedError {
+				assert.Error(t, err)
+				assert.Nil(t, sess)
+				assert.Nil(t, cookie)
+			} else {
+				assert.NoError(t, err)
+				require.NotNil(t, sess)
+				require.NotNil(t, cookie)
+				assert.Equal(t, tc.expectedValue, cookie.Value)
+			}
+
+			sessionMock.AssertExpectations(t)
+		})
+	}
+
 }
 
 func Test_defaultAPIDetector(t *testing.T) {
-	// Should detect API requests with JSON Accept header and API path
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/x", nil)
-	r.Header.Set("Accept", "application/json")
-	assert.True(t, defaultAPIDetector(r))
+	cases := []struct {
+		name     string
+		path     string
+		headers  map[string]string
+		expected bool
+	}{
+		{
+			name:     "API path with JSON accept",
+			path:     "/api/v1/x",
+			headers:  map[string]string{"Accept": "application/json"},
+			expected: true,
+		},
+		{
+			name:     "regular web request",
+			path:     "/ui",
+			headers:  map[string]string{"Accept": "text/html"},
+			expected: false,
+		},
+		{
+			name:     "API path without JSON accept",
+			path:     "/api/v1/x",
+			headers:  map[string]string{"Accept": "text/html"},
+			expected: true,
+		},
+		{
+			name:     "JSON accept without API path",
+			path:     "/x",
+			headers:  map[string]string{"Accept": "application/json"},
+			expected: true,
+		},
+		{
+			name:     "JSON content type header",
+			path:     "/some/endpoint",
+			headers:  map[string]string{"Content-Type": "application/json"},
+			expected: true,
+		},
+		{
+			name:     "v1 path",
+			path:     "/v1/users",
+			headers:  nil,
+			expected: true,
+		},
+		{
+			name:     "v2 path",
+			path:     "/v2/users",
+			headers:  nil,
+			expected: true,
+		},
+		{
+			name:     "non-API path with HTML accept",
+			path:     "/some/web/page",
+			headers:  map[string]string{"Accept": "text/html"},
+			expected: false,
+		},
+		{
+			name: "API path with both JSON accept and content type",
+			path: "/api/v1/users",
+			headers: map[string]string{
+				"Accept":       "application/json",
+				"Content-Type": "application/json",
+			},
+			expected: true,
+		},
+	}
 
-	// Should NOT detect regular web requests
-	r = httptest.NewRequest(http.MethodGet, "/ui", nil)
-	r.Header.Set("Accept", "text/html")
-	assert.False(t, defaultAPIDetector(r))
-
-	// Should detect API request with API path even without JSON accept
-	// (This is different from your old logic - now path alone is enough)
-	r = httptest.NewRequest(http.MethodGet, "/api/v1/x", nil)
-	r.Header.Set("Accept", "text/html")
-	assert.True(t, defaultAPIDetector(r)) // This was False in old test
-
-	// Should detect API request with JSON accept even without API path
-	// (This is different from your old logic - now JSON header alone is enough)
-	r = httptest.NewRequest(http.MethodGet, "/x", nil)
-	r.Header.Set("Accept", "application/json")
-	assert.True(t, defaultAPIDetector(r)) // This was False in old test
-
-	// Additional test cases for the new logic
-
-	// Should detect with JSON Content-Type
-	r = httptest.NewRequest(http.MethodPost, "/some/endpoint", nil)
-	r.Header.Set("Content-Type", "application/json")
-	assert.True(t, defaultAPIDetector(r))
-
-	// Should detect v1 and v2 paths
-	r = httptest.NewRequest(http.MethodGet, "/v1/users", nil)
-	assert.True(t, defaultAPIDetector(r))
-
-	r = httptest.NewRequest(http.MethodGet, "/v2/users", nil)
-	assert.True(t, defaultAPIDetector(r))
-
-	// Should NOT detect non-API paths without JSON headers
-	r = httptest.NewRequest(http.MethodGet, "/some/web/page", nil)
-	r.Header.Set("Accept", "text/html")
-	assert.False(t, defaultAPIDetector(r))
-
-	// Edge case: both conditions present (should definitely be true)
-	r = httptest.NewRequest(http.MethodPost, "/api/v1/users", nil)
-	r.Header.Set("Accept", "application/json")
-	r.Header.Set("Content-Type", "application/json")
-	assert.True(t, defaultAPIDetector(r))
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			for k, v := range tc.headers {
+				req.Header.Set(k, v)
+			}
+			assert.Equal(t, tc.expected, defaultAPIDetector(req))
+		})
+	}
 }
-
-// If you want to keep the old behavior for specific use cases,
-// you can create a separate test for a stricter detector:
-func strictAPIDetector(r *http.Request) bool {
-	// Original logic: requires BOTH conditions
-	acceptHeader := strings.ToLower(r.Header.Get("Accept"))
-	acceptsJSON := strings.Contains(acceptHeader, "application/json")
-
-	path := strings.ToLower(r.URL.Path)
-	pathContainsAPI := strings.HasPrefix(path, "/api/")
-
-	return acceptsJSON && pathContainsAPI
-}
-
-func Test_strictAPIDetector(t *testing.T) {
-	// This matches your original test logic exactly
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/x", nil)
-	r.Header.Set("Accept", "application/json")
-	assert.True(t, strictAPIDetector(r))
-
-	r = httptest.NewRequest(http.MethodGet, "/ui", nil)
-	r.Header.Set("Accept", "text/html")
-	assert.False(t, strictAPIDetector(r))
-
-	// must satisfy both
-	r = httptest.NewRequest(http.MethodGet, "/api/v1/x", nil)
-	r.Header.Set("Accept", "text/html")
-	assert.False(t, strictAPIDetector(r))
-
-	r = httptest.NewRequest(http.MethodGet, "/x", nil)
-	r.Header.Set("Accept", "application/json")
-	assert.False(t, strictAPIDetector(r))
-}
-
-// Test the enforcer's API detector functionality
-func Test_EnforcerAPIDetection(t *testing.T) {
-	// Test with default detector
-	enforcer := newBaseEnforcer()
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/test", nil)
-	r.Header.Set("Accept", "application/json")
-	assert.True(t, enforcer.APIDetector(r))
-
-	// Test with custom detector
-	enforcer = newBaseEnforcer().WithAPIDetector(strictAPIDetector)
-
-	// This should be false with strict detector (no JSON accept header)
-	r = httptest.NewRequest(http.MethodGet, "/api/v1/test", nil)
-	r.Header.Set("Accept", "text/html")
-	assert.False(t, enforcer.APIDetector(r))
-}
-
-//
-// ---------- tests for tryJWTAuth / trySessionAuth ----------
-//
 
 func Test_tryJWTAuth(t *testing.T) {
-	e := newBaseEnforcer()
 	uid := uuid.New()
 
-	// valid JWT
-	e.token = &fakeToken{
-		parseFn: func(ctx context.Context, s string) (*tokenstore.AccessToken, error) {
-			return &tokenstore.AccessToken{
-				RegisteredClaims: jwt.RegisteredClaims{
-					Subject: uid.String(),
-				},
-			}, nil
+	cases := []struct {
+		name           string
+		setupMocks     func(auth *AuthStoreMock, token *TokenStoreMock)
+		setupRequest   func() *http.Request
+		expectOK       bool
+		expectUserID   uuid.UUID
+		expectTokenStr string
+	}{
+		{
+			name: "valid JWT",
+			setupMocks: func(auth *AuthStoreMock, token *TokenStoreMock) {
+				token.On("ParseAccessTokenAndValidate", mock.Anything, "tok").
+					Return(&tokenstore.AccessToken{RegisteredClaims: jwt.RegisteredClaims{Subject: uid.String()}}, nil)
+				auth.On("GetUserByID", mock.Anything, uid).
+					Return(&models.User{ID: uid, IsActive: true}, nil)
+			},
+			setupRequest: func() *http.Request {
+				req := httptest.NewRequest(http.MethodGet, "/", nil)
+				req.Header.Set("Authorization", "Bearer tok")
+				return req
+			},
+			expectOK:       true,
+			expectUserID:   uid,
+			expectTokenStr: "tok",
+		},
+		{
+			name:       "invalid header",
+			setupMocks: func(auth *AuthStoreMock, token *TokenStoreMock) {},
+			setupRequest: func() *http.Request {
+				return httptest.NewRequest(http.MethodGet, "/", nil)
+			},
+			expectOK: false,
+		},
+		{
+			name: "parse error",
+			setupMocks: func(auth *AuthStoreMock, token *TokenStoreMock) {
+				token.On("ParseAccessTokenAndValidate", mock.Anything, "bad").
+					Return(nil, errors.New("nope"))
+			},
+			setupRequest: func() *http.Request {
+				req := httptest.NewRequest(http.MethodGet, "/", nil)
+				req.Header.Set("Authorization", "Bearer bad")
+				return req
+			},
+			expectOK: false,
 		},
 	}
-	e.auth = &fakeAuth{
-		getUserFn: func(ctx context.Context, id uuid.UUID) (*models.User, error) {
-			return &models.User{ID: id, IsActive: true}, nil
-		},
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			enf, authMock, _, tokenMock, _ := NewEnforcerFromMocks()
+			tc.setupMocks(authMock, tokenMock)
+
+			u, tok, ok := enf.tryJWTAuth(tc.setupRequest())
+
+			assert.Equal(t, tc.expectOK, ok)
+			if ok {
+				require.NotNil(t, u)
+				assert.Equal(t, tc.expectUserID, u.ID)
+				assert.Equal(t, tc.expectTokenStr, tok)
+			}
+		})
 	}
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Header.Set("Authorization", "Bearer tok")
-	u, tok, ok := e.tryJWTAuth(req)
-	require.True(t, ok)
-	assert.Equal(t, uid, u.ID)
-	assert.Equal(t, "tok", tok)
-
-	// invalid header -> false
-	req = httptest.NewRequest(http.MethodGet, "/", nil)
-	_, _, ok = e.tryJWTAuth(req)
-	assert.False(t, ok)
-
-	// parse error -> false
-	req = httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Header.Set("Authorization", "Bearer bad")
-	e.token = &fakeToken{parseFn: func(ctx context.Context, s string) (*tokenstore.AccessToken, error) {
-		return nil, errors.New("nope")
-	}}
-	_, _, ok = e.tryJWTAuth(req)
-	assert.False(t, ok)
 }
 
 func Test_trySessionAuth(t *testing.T) {
-	e := newBaseEnforcer()
+	guestID := uuid.Nil
 
-	// valid guest session (cookie present)
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.AddCookie(&http.Cookie{Name: "session_token", Value: "s1"})
-	w := httptest.NewRecorder()
-	u, ok := e.trySessionAuth(req, w)
-	require.True(t, ok)
-	require.NotNil(t, u)
-	assert.Equal(t, uuid.Nil, u.ID) // guest
-
-	// expired session -> handleSessionError + false
-	e.session = &fakeSessionStore{
-		getFn: func(ctx context.Context, id string) (*models.Session, error) {
-			return nil, sessionstore.ErrSessionExpired
+	cases := []struct {
+		name         string
+		sessionID    string
+		userID       uuid.UUID // the ID the session should return if valid
+		setupMocks   func(session *SessionStoreMock, auth *AuthStoreMock, cookie *CookieStoreMock, userID uuid.UUID)
+		setupRequest func() *http.Request
+		expectOK     bool
+		expectStatus int
+	}{
+		{
+			name:      "valid guest session",
+			sessionID: "s1",
+			userID:    guestID,
+			setupMocks: func(session *SessionStoreMock, auth *AuthStoreMock, cookie *CookieStoreMock, userID uuid.UUID) {
+				session.On("Get", mock.Anything, "s1").
+					Return(&models.Session{UserID: userID}, nil)
+			},
+			setupRequest: func() *http.Request {
+				req := httptest.NewRequest(http.MethodGet, "/", nil)
+				req.AddCookie(&http.Cookie{Name: "session_token", Value: "s1"})
+				return req
+			},
+			expectOK:     true,
+			expectStatus: http.StatusOK,
 		},
-		createFn: func(ctx context.Context, uid uuid.UUID) (*models.Session, error) { return nil, errors.New("n/a") },
-		expireFn: func(c *http.Cookie, w http.ResponseWriter) {},
-	}
-	req = httptest.NewRequest(http.MethodGet, "/", nil)
-	req.AddCookie(&http.Cookie{Name: "session_token", Value: "expired"})
-	w = httptest.NewRecorder()
-	_, ok = e.trySessionAuth(req, w)
-	assert.False(t, ok)
-	assert.Equal(t, http.StatusSeeOther, w.Result().StatusCode)
-}
-
-//
-// ---------- tests for AuthenticationMiddleware ----------
-//
-
-func Test_AuthenticationMiddleware_JWTPath(t *testing.T) {
-	e := newBaseEnforcer()
-	uid := uuid.New()
-
-	// make JWT valid
-	e.token = &fakeToken{
-		parseFn: func(ctx context.Context, s string) (*tokenstore.AccessToken, error) {
-			return &tokenstore.AccessToken{
-				RegisteredClaims: jwt.RegisteredClaims{
-					Subject: uid.String(),
-				},
-			}, nil
-		},
-	}
-	e.auth = &fakeAuth{
-		getUserFn: func(ctx context.Context, id uuid.UUID) (*models.User, error) {
-			return &models.User{ID: id, IsActive: true}, nil
+		{
+			name:      "expired session",
+			sessionID: "expired",
+			userID:    uuid.Nil, // won't be used
+			setupMocks: func(session *SessionStoreMock, auth *AuthStoreMock, cookie *CookieStoreMock, userID uuid.UUID) {
+				session.On("Get", mock.Anything, "expired").
+					Return(nil, sessionstore.ErrSessionExpired)
+				cookie.On("ClearUserSessionCookie", mock.Anything).
+					Return(nil)
+			},
+			setupRequest: func() *http.Request {
+				req := httptest.NewRequest(http.MethodGet, "/", nil)
+				req.AddCookie(&http.Cookie{Name: "session_token", Value: "expired"})
+				return req
+			},
+			expectOK:     false,
+			expectStatus: http.StatusSeeOther,
 		},
 	}
 
-	var gotUser *models.User
-	var gotJWT string
-	h := e.AuthenticationMiddleware(nextHandlerCaptureUserAndJWT(t, &gotUser, &gotJWT))
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			enf, _, sessionMock, _, cookieMock := NewEnforcerFromMocks()
+			tc.setupMocks(sessionMock, nil, cookieMock, tc.userID)
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Header.Set("Authorization", "Bearer abc.jwt")
-	w := httptest.NewRecorder()
+			w := httptest.NewRecorder()
+			u, ok := enf.trySessionAuth(tc.setupRequest(), w)
 
-	h.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusOK, w.Code)
-	require.NotNil(t, gotUser)
-	assert.Equal(t, uid, gotUser.ID)
-	assert.Equal(t, "abc.jwt", gotJWT)
-}
-
-func Test_AuthenticationMiddleware_SessionPath(t *testing.T) {
-	e := newBaseEnforcer()
-
-	// session with real user (not guest)
-	userID := uuid.New()
-	e.session = &fakeSessionStore{
-		getFn: func(ctx context.Context, id string) (*models.Session, error) {
-			return &models.Session{ID: id, UserID: userID, ExpiresAt: time.Now().Add(time.Hour)}, nil
-		},
-		createFn: func(ctx context.Context, uid uuid.UUID) (*models.Session, error) {
-			return &models.Session{ID: "new", UserID: uid, ExpiresAt: time.Now().Add(time.Hour)}, nil
-		},
-		expireFn: func(c *http.Cookie, w http.ResponseWriter) {},
+			assert.Equal(t, tc.expectOK, ok)
+			assert.Equal(t, tc.expectStatus, w.Result().StatusCode)
+			if ok {
+				require.NotNil(t, u)
+				assert.Equal(t, tc.userID, u.ID)
+			}
+		})
 	}
-	e.auth = &fakeAuth{getUserFn: func(ctx context.Context, id uuid.UUID) (*models.User, error) {
-		return &models.User{ID: id, IsActive: true}, nil
-	}}
-
-	var gotUser *models.User
-	var gotJWT string
-	h := e.AuthenticationMiddleware(nextHandlerCaptureUserAndJWT(t, &gotUser, &gotJWT))
-
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.AddCookie(&http.Cookie{Name: "session_token", Value: "sess-123"})
-	w := httptest.NewRecorder()
-
-	h.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusOK, w.Code)
-	require.NotNil(t, gotUser)
-	assert.Equal(t, userID, gotUser.ID)
-	assert.Equal(t, "", gotJWT) // no JWT on session path
-}
-
-func Test_AuthenticationMiddleware_FallbackGuest_SetsCookie(t *testing.T) {
-	e := newBaseEnforcer()
-
-	var gotUser *models.User
-	var gotJWT string
-	h := e.AuthenticationMiddleware(nextHandlerCaptureUserAndJWT(t, &gotUser, &gotJWT))
-
-	// no JWT, no cookie -> createGuestSession
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	w := httptest.NewRecorder()
-
-	h.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusOK, w.Code)
-	require.NotNil(t, gotUser)
-	assert.Equal(t, uuid.Nil, gotUser.ID)
-
-	// should set a session_token cookie
-	setCookie := false
-	for _, c := range w.Result().Cookies() {
-		if c.Name == "session_token" && c.Value != "" {
-			setCookie = true
-			break
-		}
-	}
-	assert.True(t, setCookie, "expected session_token cookie to be set")
-}
-
-func Test_AuthenticationMiddleware_FallbackGuest_ErrorBranches(t *testing.T) {
-	// make Create fail so guest creation errors
-	e := newBaseEnforcer()
-	e.session = &fakeSessionStore{
-		getFn: func(ctx context.Context, id string) (*models.Session, error) { return nil, errors.New("no session") },
-		createFn: func(ctx context.Context, uid uuid.UUID) (*models.Session, error) {
-			return nil, errors.New("create fail")
-		},
-		expireFn: func(c *http.Cookie, w http.ResponseWriter) {},
-	}
-
-	// Browser request -> http.Error 500
-	req := httptest.NewRequest(http.MethodGet, "/web", nil)
-	req.Header.Set("Accept", "text/html")
-	w := httptest.NewRecorder()
-	e.AuthenticationMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})).ServeHTTP(w, req)
-	assert.Equal(t, http.StatusInternalServerError, w.Result().StatusCode)
-
-	// API request -> api.ReturnError path (status should be a failure; assert non-200)
-	req = httptest.NewRequest(http.MethodGet, "/api/thing", nil)
-	req.Header.Set("Accept", "application/json")
-	w = httptest.NewRecorder()
-	e.AuthenticationMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})).ServeHTTP(w, req)
-	assert.True(t, w.Code >= 400, "expected an error status code for API path")
-}
-
-//
-// ---------- tests for AuthorizationMiddleware & responses ----------
-//
-
-func Test_AuthorizationMiddleware_AllowsAndDenies(t *testing.T) {
-	e := newBaseEnforcer()
-
-	// allowed: admin at /admin
-	admin := &models.User{
-		ID:     uuid.New(),
-		Claims: map[string]models.Role{"/admin": models.RoleAdmin},
-	}
-	//set policy for test
-	e.Policies["/admin"] = map[string]models.Role{"GET": models.RoleAdmin}
-	req := httptest.NewRequest(http.MethodGet, "/admin", nil)
-	req = req.WithContext(context.WithValue(req.Context(), userContextKey, admin))
-	w := httptest.NewRecorder()
-	e.AuthorizationMiddleware("/admin", models.RoleAdmin)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})).ServeHTTP(w, req)
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	// denied: user at /admin
-	usr := &models.User{
-		ID:     uuid.New(),
-		Claims: map[string]models.Role{"/admin": models.RoleUser},
-	}
-	req = httptest.NewRequest(http.MethodGet, "/admin", nil)
-	req = req.WithContext(context.WithValue(req.Context(), userContextKey, usr))
-	w = httptest.NewRecorder()
-	e.AuthorizationMiddleware("/admin", models.RoleAdmin)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})).ServeHTTP(w, req)
-	// browser branch returns 403 (Forbidden text)
-	assert.Equal(t, http.StatusForbidden, w.Code)
-
-	// missing user in context
-	req = httptest.NewRequest(http.MethodGet, "/admin", nil)
-	w = httptest.NewRecorder()
-	e.AuthorizationMiddleware("/admin", models.RoleAdmin)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})).ServeHTTP(w, req)
-	assert.Equal(t, http.StatusForbidden, w.Code)
 }
 
 func Test_responders_nonAPI(t *testing.T) {
-	e := newBaseEnforcer()
+	cases := []struct {
+		name           string
+		setupRequest   func() *http.Request
+		responder      func(*Enforcer, http.ResponseWriter, *http.Request)
+		expectedStatus int
+	}{
+		{
+			name: "respondForbidden (browser)",
+			setupRequest: func() *http.Request {
+				req := httptest.NewRequest(http.MethodGet, "/page", nil)
+				req.Header.Set("Accept", "text/html")
+				return req
+			},
+			responder:      func(e *Enforcer, w http.ResponseWriter, r *http.Request) { e.respondForbidden(w, r) },
+			expectedStatus: http.StatusForbidden,
+		},
+		{
+			name: "respondMethodNotAllowed (browser)",
+			setupRequest: func() *http.Request {
+				req := httptest.NewRequest(http.MethodPost, "/page", nil)
+				req.Header.Set("Accept", "text/html")
+				return req
+			},
+			responder:      func(e *Enforcer, w http.ResponseWriter, r *http.Request) { e.respondMethodNotAllowed(w, r) },
+			expectedStatus: http.StatusMethodNotAllowed,
+		},
+	}
 
-	// respondForbidden (browser)
-	req := httptest.NewRequest(http.MethodGet, "/page", nil)
-	req.Header.Set("Accept", "text/html")
-	w := httptest.NewRecorder()
-	e.respondForbidden(w, req)
-	assert.Equal(t, http.StatusForbidden, w.Code)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			e, _, _, _, _ := NewEnforcerFromMocks()
+			req := tc.setupRequest()
+			w := httptest.NewRecorder()
 
-	// respondMethodNotAllowed (browser)
-	req = httptest.NewRequest(http.MethodPost, "/page", nil)
-	req.Header.Set("Accept", "text/html")
-	w = httptest.NewRecorder()
-	e.respondMethodNotAllowed(w, req)
-	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+			tc.responder(e, w, req)
+
+			assert.Equal(t, tc.expectedStatus, w.Result().StatusCode)
+		})
+	}
 }

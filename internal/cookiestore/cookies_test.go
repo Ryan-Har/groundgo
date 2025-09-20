@@ -1,4 +1,4 @@
-package cookies
+package cookiestore
 
 import (
 	"log/slog"

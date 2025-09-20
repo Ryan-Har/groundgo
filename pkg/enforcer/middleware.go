@@ -142,7 +142,7 @@ func (e *Enforcer) getUserFromSession(ctx context.Context, session *models.Sessi
 	if err != nil || user == nil || !user.IsActive {
 		e.log.Info("session request from expired/unknown/inactive user", "id", session.UserID)
 		e.cookie.ClearUserSessionCookie(w)
-		http.Redirect(w, r, e.cookie.GetConfig().RedirectOnAuthErrorPath, http.StatusSeeOther)
+		http.Redirect(w, r, e.RedirectOnAuthErrorPath, http.StatusSeeOther)
 		return nil, errors.New("invalid user session")
 	}
 	return user, nil
@@ -192,10 +192,10 @@ func (e *Enforcer) handleSessionError(err error, cookie *http.Cookie, w http.Res
 	if errors.Is(err, sessionstore.ErrSessionExpired) {
 		e.log.Debug("expired session found", "session_id", cookie.Value, "url", r.URL.Path)
 		e.cookie.ClearUserSessionCookie(w)
-		http.Redirect(w, r, e.cookie.GetConfig().RedirectOnAuthErrorPath, http.StatusSeeOther)
+		http.Redirect(w, r, e.RedirectOnAuthErrorPath, http.StatusSeeOther)
 	} else {
 		e.log.Error("unknown error getting session cookie", "error", err.Error())
-		http.Redirect(w, r, e.cookie.GetConfig().RedirectOnAuthErrorPath, http.StatusInternalServerError)
+		http.Redirect(w, r, e.RedirectOnAuthErrorPath, http.StatusInternalServerError)
 	}
 }
 
@@ -270,13 +270,13 @@ func (e *Enforcer) trySessionAuth(r *http.Request, w http.ResponseWriter) (*mode
 // If session creation or user resolution fails, an error is returned.
 func (e *Enforcer) createGuestSession(r *http.Request, w http.ResponseWriter) (*models.User, error) {
 	e.log.Debug("unauthenticated request, creating guest session",
-		"guest_state_enabled", e.cookie.GetConfig().GuestStateEnabled,
+		"guest_state_enabled", e.GuestStateEnabled,
 		"remote_address", r.RemoteAddr,
 		"url", r.URL.Path,
 		"user_agent", r.UserAgent())
 
 	// only write to stores and create a cookie if the state is enabled
-	if e.cookie.GetConfig().GuestStateEnabled {
+	if e.GuestStateEnabled {
 		guestSession, err := e.session.Create(r.Context(), uuid.Nil)
 		if err != nil {
 			e.log.Error("unable to create guest session", "err", err)
