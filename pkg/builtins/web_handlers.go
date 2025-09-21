@@ -57,7 +57,7 @@ func (h *Handler) handleLoginPost() http.HandlerFunc {
 			return
 		}
 
-		if err := h.cookieOpts.SetUserSessionCookie(w, session.ID, &session.ExpiresAt); err != nil {
+		if err := h.cookie.SetUserSessionCookie(w, session.ID, &session.ExpiresAt); err != nil {
 			h.log.Error("failed to set user session cookie", "err", err)
 			return
 		}
@@ -126,7 +126,7 @@ func (h *Handler) handleSignupPost() http.HandlerFunc {
 			h.log.Error("creating session", "err", err)
 		}
 
-		if err := h.cookieOpts.SetUserSessionCookie(w, session.ID, &session.ExpiresAt); err != nil {
+		if err := h.cookie.SetUserSessionCookie(w, session.ID, &session.ExpiresAt); err != nil {
 			h.log.Error("failed to set user session cookie", "err", err)
 			return
 		}

@@ -321,3 +321,11 @@ func JWTFromContext(ctx context.Context) (string, bool) {
 	user, ok := ctx.Value(jwtContextKey).(string)
 	return user, ok
 }
+
+func ContextWithUser(ctx context.Context, user *models.User) context.Context {
+	return context.WithValue(ctx, userContextKey, user)
+}
+
+func ContextWithJWT(ctx context.Context, token string) context.Context {
+	return context.WithValue(ctx, jwtContextKey, token)
+}

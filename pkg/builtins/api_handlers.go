@@ -70,8 +70,9 @@ func (h *Handler) handleAPITokenRefresh() http.HandlerFunc {
 			return
 		}
 
-		if err := h.cookieOpts.SetRefreshTokenCookie(w, tokenPair.RefreshToken, nil); err != nil {
+		if err := h.cookie.SetRefreshTokenCookie(w, tokenPair.RefreshToken, nil); err != nil {
 			h.log.Error("failed to set refresh token cookie", "err", err)
+			api.ReturnError(w, h.log, api.InternalServerError)
 			return
 		}
 
@@ -118,8 +119,9 @@ func (h *Handler) handleAPILoginPost() http.HandlerFunc {
 			return
 		}
 
-		if err := h.cookieOpts.SetRefreshTokenCookie(w, tokenPair.RefreshToken, nil); err != nil {
+		if err := h.cookie.SetRefreshTokenCookie(w, tokenPair.RefreshToken, nil); err != nil {
 			h.log.Error("failed to set refresh token cookie", "err", err)
+			api.ReturnError(w, h.log, api.InternalServerError)
 			return
 		}
 
@@ -155,8 +157,9 @@ func (h *Handler) handleAPILogoutPost() http.HandlerFunc {
 		}
 
 		//overwrite existing refresh cookie so that the current client cannot refresh
-		if err := h.cookieOpts.ClearRefreshTokenCookie(w); err != nil {
+		if err := h.cookie.ClearRefreshTokenCookie(w); err != nil {
 			h.log.Error("failed to set refresh token cookie", "err", err)
+			api.ReturnError(w, h.log, api.InternalServerError)
 			return
 		}
 

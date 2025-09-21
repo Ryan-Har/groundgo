@@ -7,7 +7,6 @@ import (
 
 	"github.com/Ryan-Har/groundgo/pkg/enforcer"
 	"github.com/Ryan-Har/groundgo/pkg/models"
-	"github.com/Ryan-Har/groundgo/pkg/store"
 )
 
 type Builtin struct {
@@ -16,7 +15,7 @@ type Builtin struct {
 }
 
 // New initializes and returns a new DefaultRoutes instance
-func New(logger *slog.Logger, enforcer *enforcer.Enforcer, auth store.Authstore, session store.Sessionstore, token store.Tokenstore, cookie CookieOpts) *Builtin {
+func New(logger *slog.Logger, enforcer *enforcer.Enforcer, auth auth, session session, token token, cookie cookie) *Builtin {
 	return &Builtin{
 		enforcer: enforcer,
 		handler:  *newHandler(logger, auth, session, token, cookie, "", "/groundgo/api/v1"),
