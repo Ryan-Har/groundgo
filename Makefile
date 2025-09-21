@@ -81,7 +81,6 @@ install-tools: ## Install development tools
 	$(GO) get -tool github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 	$(GO) get -tool github.com/golang-migrate/migrate/v4/cmd/migrate@latest
 	$(GO) get -tool github.com/sqlc-dev/sqlc/cmd/sqlc@latest
-	$(GO) get -tool github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest
 
 .PHONY: deps
 deps: ## Install dependencies
