@@ -1,29 +1,133 @@
-package builtins
+package web
 
 import (
+	"bytes"
+	"context"
+	"embed"
 	"fmt"
+	"html/template"
+	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/Ryan-Har/groundgo/pkg/models"
 	"github.com/Ryan-Har/groundgo/pkg/models/passwd"
-	"github.com/Ryan-Har/groundgo/web/templates"
+	webmodels "github.com/Ryan-Har/groundgo/web/models"
 	"github.com/google/uuid"
 )
 
-func (h *Handler) handleLoginGet() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
+//go:embed templates/**/*.go.tpl
+var templateFiles embed.FS
 
-		content := templates.LoginPage()
-		if err := templates.Layout("Login", content).Render(r.Context(), w); err != nil {
-			h.log.Error("unable to GET /login", "err", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
+// maybe static
+////go:embed static/*
+// var staticFiles embed.FS
+
+type Handler struct {
+	auth      auth
+	session   session
+	cookie    cookie
+	log       *slog.Logger
+	baseRoute string
+	tmpl      *templateEngine
+}
+
+func New(logger *slog.Logger, auth auth, session session, cookie cookie, baseRoute string) *Handler {
+	funcMap := template.FuncMap{
+		"eq":  func(a, b any) bool { return a == b },
+		"mod": func(a, b int) int { return a % b },
+	}
+
+	t := template.Must(
+		template.New("").Funcs(funcMap).ParseFS(templateFiles, "templates/**/*.go.tpl"),
+	)
+
+	tmpl := templateEngine{
+		tmpl: t,
+		log:  logger,
+	}
+
+	return &Handler{
+		auth:      auth,
+		session:   session,
+		cookie:    cookie,
+		log:       logger,
+		baseRoute: baseRoute,
+		tmpl:      &tmpl,
 	}
 }
 
-func (h *Handler) handleLoginPost() http.HandlerFunc {
+type auth interface {
+	ListAllUsers(ctx context.Context) ([]*models.User, error)
+	CheckEmailExists(ctx context.Context, email string) (bool, error)
+	CreateUser(ctx context.Context, args models.CreateUserParams) (*models.User, error)
+	GetUserByEmail(ctx context.Context, email string) (*models.User, error)
+	GetUserByID(ctx context.Context, id uuid.UUID) (*models.User, error)
+	UpdateUserByID(ctx context.Context, args models.UpdateUserByIDParams) (*models.User, error)
+	HardDeleteUser(ctx context.Context, id uuid.UUID) error
+	SoftDeleteUser(ctx context.Context, id uuid.UUID) error
+	RestoreUser(ctx context.Context, id uuid.UUID) error
+}
+
+type session interface {
+	Create(ctx context.Context, userID uuid.UUID) (*models.Session, error)
+}
+
+type cookie interface {
+	SetUserSessionCookie(w http.ResponseWriter, value string, customExpires *time.Time) error
+}
+
+type templateEngine struct {
+	tmpl *template.Template
+	log  *slog.Logger
+}
+
+// Render renders any template to the http.ResponseWriter with standard logging messages.
+func (t *templateEngine) Render(w http.ResponseWriter, name string, data any) {
+	err := t.tmpl.ExecuteTemplate(w, name, data)
+	if err != nil {
+		t.log.Error("render template", "name", name, "err", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+	}
+}
+
+// RenderPage renders any page to the http.ResponseWriter with standard logging messages.
+// It accepts the http.ResponseWriter, the pageName (name of the template), data (the context) and the title of the page.
+func (t *templateEngine) RenderPage(w http.ResponseWriter, pageName string, data any, title string) {
+	var buf bytes.Buffer
+
+	// Render the page template into a buffer
+	if err := t.tmpl.ExecuteTemplate(&buf, pageName, data); err != nil {
+		t.log.Error("render page template", "name", pageName, "err", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Wrap the page content into the layout
+	layoutData := struct {
+		Title   string
+		Content template.HTML
+	}{
+		Title:   title,
+		Content: template.HTML(buf.String()),
+	}
+
+	if err := t.tmpl.ExecuteTemplate(w, "base", layoutData); err != nil {
+		t.log.Error("render layout template", "name", "base", "err", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+}
+
+func (h *Handler) HandleLoginGet() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
+		h.tmpl.RenderPage(w, "login_page", nil, "Login")
+	}
+}
+
+func (h *Handler) HandleLoginPost() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 
@@ -38,16 +142,9 @@ func (h *Handler) handleLoginPost() http.HandlerFunc {
 
 		h.log.Debug("form parsed", "method", r.Method, "path", r.URL.Path)
 		user, err := h.auth.GetUserByEmail(r.Context(), email)
-		if err != nil || user.PasswordHash == nil || !user.IsActive {
-			if rendErr := templates.LoginError().Render(r.Context(), w); rendErr != nil {
-				h.log.Error("returning login error from POST /login", "err", err)
-			}
-			return
-		}
-		if !passwd.Authenticate(password, *user.PasswordHash) {
-			if rendErr := templates.LoginError().Render(r.Context(), w); rendErr != nil {
-				h.log.Error("returning login error from POST /login", "err", err)
-			}
+		if err != nil || user.PasswordHash == nil || !user.IsActive ||
+			!passwd.Authenticate(password, *user.PasswordHash) {
+			h.tmpl.Render(w, "login_error", nil)
 			return
 		}
 
@@ -67,19 +164,14 @@ func (h *Handler) handleLoginPost() http.HandlerFunc {
 	}
 }
 
-func (h *Handler) handleSignupGet() http.HandlerFunc {
+func (h *Handler) HandleSignupGet() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
-
-		content := templates.SignupPage()
-		if err := templates.Layout("Signup", content).Render(r.Context(), w); err != nil {
-			h.log.Error("unable to GET /signup", "err", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
+		h.tmpl.RenderPage(w, "signup_page", nil, "Signup")
 	}
 }
 
-func (h *Handler) handleSignupPost() http.HandlerFunc {
+func (h *Handler) HandleSignupPost() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 
@@ -95,16 +187,12 @@ func (h *Handler) handleSignupPost() http.HandlerFunc {
 
 		h.log.Debug("form parsed", "method", r.Method, "path", r.URL.Path)
 		if password != confirm {
-			if err := templates.SignupError("Passwords do not match").Render(r.Context(), w); err != nil {
-				h.log.Error("returning signup error from POST /signup", "err", err)
-			}
+			h.tmpl.Render(w, "signup_error", webmodels.SignupError{ErrorMessage: "Passwords do not match"})
 			return
 		}
 
 		if exists, _ := h.auth.CheckEmailExists(r.Context(), email); exists {
-			if err := templates.SignupError("Account already exists").Render(r.Context(), w); err != nil {
-				h.log.Error("returning signup error from POST /signup", "err", err)
-			}
+			h.tmpl.Render(w, "signup_error", webmodels.SignupError{ErrorMessage: "Account already exists"})
 			return
 		}
 
@@ -115,9 +203,7 @@ func (h *Handler) handleSignupPost() http.HandlerFunc {
 			Claims:   models.Claims{},
 		})
 		if err != nil {
-			if err := templates.SignupError("Unable to create user, please try again later.").Render(r.Context(), w); err != nil {
-				h.log.Error("returning signup error from POST /signup", "err", err)
-			}
+			h.tmpl.Render(w, "signup_error", webmodels.SignupError{ErrorMessage: "Unable to create user, please try again later"})
 			return
 		}
 
@@ -136,7 +222,7 @@ func (h *Handler) handleSignupPost() http.HandlerFunc {
 	}
 }
 
-func (h *Handler) handleAdminGet() http.HandlerFunc {
+func (h *Handler) HandleAdminGet() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 
@@ -146,15 +232,13 @@ func (h *Handler) handleAdminGet() http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		content := templates.AdminPage(users)
-		if err := templates.Layout("Admin", content).Render(r.Context(), w); err != nil {
-			h.log.Error("unable to GET /admin", "err", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
+
+		ctx := webmodels.BuildAdminPageCtx(users)
+		h.tmpl.RenderPage(w, "admin_page", ctx, "Admin")
 	}
 }
 
-func (h *Handler) handleAdminUserRowGet() http.HandlerFunc {
+func (h *Handler) HandleAdminUserRowGet() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 
@@ -173,14 +257,12 @@ func (h *Handler) handleAdminUserRowGet() http.HandlerFunc {
 			return
 		}
 
-		if err := templates.UserRow(user).Render(r.Context(), w); err != nil {
-			h.log.Error("unable to render UserRowPartial", "err", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
+		ctx := webmodels.BuildAdminPageUserTableRowCtx(user)
+		h.tmpl.Render(w, "admin_page_user_table_row", ctx)
 	}
 }
 
-func (h *Handler) handleAdminUserRowEditGet() http.HandlerFunc {
+func (h *Handler) HandleAdminUserRowEditGet() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 
@@ -199,14 +281,12 @@ func (h *Handler) handleAdminUserRowEditGet() http.HandlerFunc {
 			return
 		}
 
-		if err := templates.UserRowEditPartial(user).Render(r.Context(), w); err != nil {
-			h.log.Error("unable to render UserRowEditPartial", "err", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
+		ctx := webmodels.BuildAdminPageUserTableRowEditCtx(user)
+		h.tmpl.Render(w, "admin_page_user_table_row_edit", ctx)
 	}
 }
 
-func (h *Handler) handleAdminUserUpdatePut() http.HandlerFunc {
+func (h *Handler) HandleAdminUserUpdatePut() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 
@@ -262,14 +342,12 @@ func (h *Handler) handleAdminUserUpdatePut() http.HandlerFunc {
 		statsUpdateHeader := fmt.Sprintf(`{"update-stats":{"admin":%d}}`, adminCountDelta(beforeUpdateUser, afterUpdateUser))
 		w.Header().Set("HX-Trigger", statsUpdateHeader)
 
-		if err := templates.UserRow(afterUpdateUser).Render(r.Context(), w); err != nil {
-			h.log.Error("unable to render UserRowPartial", "err", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
+		ctx := webmodels.BuildAdminPageUserTableRowCtx(afterUpdateUser)
+		h.tmpl.Render(w, "admin_page_user_table_row", ctx)
 	}
 }
 
-func (h *Handler) handleAdminUserDelete() http.HandlerFunc {
+func (h *Handler) HandleAdminUserDelete() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 
@@ -314,7 +392,7 @@ func (h *Handler) handleAdminUserDelete() http.HandlerFunc {
 	}
 }
 
-func (h *Handler) handleAdminUserDisable() http.HandlerFunc {
+func (h *Handler) HandleAdminUserDisable() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 
@@ -341,14 +419,12 @@ func (h *Handler) handleAdminUserDisable() http.HandlerFunc {
 
 		w.Header().Set("HX-Trigger", `{"update-stats":{"active":-1,"inactive":1}}`)
 
-		if err := templates.UserRow(user).Render(r.Context(), w); err != nil {
-			h.log.Error("unable to render UserRowPartial", "err", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
+		ctx := webmodels.BuildAdminPageUserTableRowCtx(user)
+		h.tmpl.Render(w, "admin_page_user_table_row", ctx)
 	}
 }
 
-func (h *Handler) handleAdminUserEnable() http.HandlerFunc {
+func (h *Handler) HandleAdminUserEnable() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 
@@ -374,11 +450,8 @@ func (h *Handler) handleAdminUserEnable() http.HandlerFunc {
 		}
 
 		w.Header().Set("HX-Trigger", `{"update-stats":{"active":1,"inactive":-1}}`)
-
-		if err := templates.UserRow(user).Render(r.Context(), w); err != nil {
-			h.log.Error("unable to render UserRowPartial", "err", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
+		ctx := webmodels.BuildAdminPageUserTableRowCtx(user)
+		h.tmpl.Render(w, "admin_page_user_table_row", ctx)
 	}
 }
 

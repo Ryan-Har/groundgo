@@ -7,18 +7,21 @@ import (
 
 	"github.com/Ryan-Har/groundgo/pkg/enforcer"
 	"github.com/Ryan-Har/groundgo/pkg/models"
+	"github.com/Ryan-Har/groundgo/web"
 )
 
 type Builtin struct {
-	enforcer *enforcer.Enforcer
-	handler  Handler
+	enforcer   *enforcer.Enforcer
+	handler    Handler
+	webhandler *web.Handler
 }
 
 // New initializes and returns a new DefaultRoutes instance
 func New(logger *slog.Logger, enforcer *enforcer.Enforcer, auth auth, session session, token token, cookie cookie) *Builtin {
 	return &Builtin{
-		enforcer: enforcer,
-		handler:  *newHandler(logger, auth, session, token, cookie, "", "/groundgo/api/v1"),
+		enforcer:   enforcer,
+		handler:    *newHandler(logger, auth, session, token, cookie, "", "/groundgo/api/v1"),
+		webhandler: web.New(logger, auth, session, cookie, ""),
 	}
 }
 
@@ -56,8 +59,8 @@ func (b *Builtin) LoadDefaultRootPolicy() {
 // session cookie upon successful authentication.
 func (b *Builtin) LoadDefaultLoginRoute() error {
 	return b.registerRoutes(map[string]http.HandlerFunc{
-		"GET " + b.handler.baseRoute + "/login":  b.handler.handleLoginGet(),
-		"POST " + b.handler.baseRoute + "/login": b.handler.handleLoginPost(),
+		"GET " + b.handler.baseRoute + "/login": b.webhandler.HandleLoginGet(),
+		"POST " + b.handler.baseRoute + "/login": b.webhandler.HandleLoginPost(),
 	})
 }
 
@@ -75,8 +78,8 @@ func (b *Builtin) LoadDefaultLoginPolicies() {
 // new user account, and initiates a session.
 func (b *Builtin) LoadDefaultSignupRoute() error {
 	return b.registerRoutes(map[string]http.HandlerFunc{
-		"GET " + b.handler.baseRoute + "/signup":  b.handler.handleSignupGet(),
-		"POST " + b.handler.baseRoute + "/signup": b.handler.handleSignupPost(),
+		"GET " + b.handler.baseRoute + "/signup":  b.webhandler.HandleSignupGet(),
+		"POST " + b.handler.baseRoute + "/signup": b.webhandler.HandleSignupPost(),
 	})
 }
 
@@ -90,13 +93,13 @@ func (b *Builtin) LoadDefaultSignupPolicies() {
 // It defines multiple handlers for the various htmx interactive components.
 func (b *Builtin) LoadDefaultAdminRoute() error {
 	return b.registerRoutes(map[string]http.HandlerFunc{
-		"GET " + b.handler.baseRoute + "/admin":                     b.handler.handleAdminGet(),
-		"GET " + b.handler.baseRoute + "/admin/users/{id}":          b.handler.handleAdminUserRowGet(),
-		"GET " + b.handler.baseRoute + "/admin/users/{id}/edit-row": b.handler.handleAdminUserRowEditGet(),
-		"PUT " + b.handler.baseRoute + "/admin/users/{id}":          b.handler.handleAdminUserUpdatePut(),
-		"DELETE " + b.handler.baseRoute + "/admin/users/{id}":       b.handler.handleAdminUserDelete(),
-		"POST " + b.handler.baseRoute + "/admin/users/{id}/disable": b.handler.handleAdminUserDisable(),
-		"POST " + b.handler.baseRoute + "/admin/users/{id}/enable":  b.handler.handleAdminUserEnable(),
+		"GET " + b.handler.baseRoute + "/admin":                     b.webhandler.HandleAdminGet(),
+		"GET " + b.handler.baseRoute + "/admin/users/{id}":          b.webhandler.HandleAdminUserRowGet(),
+		"GET " + b.handler.baseRoute + "/admin/users/{id}/edit-row": b.webhandler.HandleAdminUserRowEditGet(),
+		"PUT " + b.handler.baseRoute + "/admin/users/{id}":          b.webhandler.HandleAdminUserUpdatePut(),
+		"DELETE " + b.handler.baseRoute + "/admin/users/{id}":       b.webhandler.HandleAdminUserDelete(),
+		"POST " + b.handler.baseRoute + "/admin/users/{id}/disable": b.webhandler.HandleAdminUserDisable(),
+		"POST " + b.handler.baseRoute + "/admin/users/{id}/enable":  b.webhandler.HandleAdminUserEnable(),
 	})
 }
 

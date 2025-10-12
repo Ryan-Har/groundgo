@@ -36,6 +36,10 @@ func (s *sqliteAuthStore) CreateUser(ctx context.Context, args models.CreateUser
 	defer logutil.NewTimingLogger(s.log, time.Now(), "executed sql query", "method", "CreateUser")()
 	errMsg := "failed to create user"
 
+	if err := args.Validate(); err != nil {
+		return nil, err
+	}
+
 	// set the root to the provided role
 	if args.Role.IsValid() {
 		args.Claims.AddRole("/", models.Role(args.Role))
