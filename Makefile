@@ -36,7 +36,7 @@ run: generate ## Run the application
 	$(GO) run ./cmd/main.go
 
 .PHONY: generate
-generate: sqlc-generate templ-generate ## Generate all code (templ templates, etc.)
+generate: sqlc-generate ## Generate all code (templ templates, etc.)
 
 .PHONY: templ-generate
 templ-generate: ## Generate code from templ templates
@@ -77,7 +77,6 @@ clean: ## Clean build artifacts
 .PHONY: install-tools
 install-tools: ## Install development tools
 	@echo "$(COLOR_BLUE)Installing development tools...$(COLOR_RESET)"
-	$(GO) get -tool github.com/a-h/templ/cmd/templ@latest
 	$(GO) get -tool github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 	$(GO) get -tool github.com/golang-migrate/migrate/v4/cmd/migrate@latest
 	$(GO) get -tool github.com/sqlc-dev/sqlc/cmd/sqlc@latest

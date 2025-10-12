@@ -31,6 +31,10 @@ func (c *CreateUserParams) Validate() error {
 	if c.Password == nil {
 		return NewValidationError("password is required")
 	}
+
+	if c.Claims == nil {
+		c.Claims = make(Claims) // initialize empty map
+	}
 	return nil
 }
 

@@ -1,0 +1,48 @@
+{{ define "login_page" }}
+<div class="columns is-centered">
+  <div class="column is-half">
+    <h1 class="title has-text-centered">Login</h1>
+    <form
+      hx-post="/login"
+      hx-target="#login-response"
+      hx-swap="innerHTML"
+      class="box"
+      x-data="{ email: '', password: '' }"
+    >
+      <div class="field">
+        <label class="label">Email</label>
+        <div class="control">
+          <input
+            class="input"
+            type="email"
+            placeholder="e.g. you@example.com"
+            x-model="email"
+            name="email"
+            required
+          />
+        </div>
+      </div>
+      <div class="field">
+        <label class="label">Password</label>
+        <div class="control">
+          <input
+            class="input"
+            type="password"
+            placeholder="*******"
+            x-model="password"
+            name="password"
+            required
+          />
+        </div>
+      </div>
+      <div class="field">
+        <button class="button is-primary is-fullwidth">Login</button>
+      </div>
+      <p class="has-text-centered">
+        Don't have an account? <a href="/signup">Sign up</a>
+      </p>
+    </form>
+    <div id="login-response"></div>
+  </div>
+</div>
+{{ end }}

@@ -1,8 +1,7 @@
-package builtins
+package web
 
 import (
 	"errors"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -30,14 +29,12 @@ func TestHandler_handleLoginGet(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := &Handler{
-				log: slog.Default(),
-			}
+			handler, _, _, _ := NewHandlerfromMocks()
 
 			req := httptest.NewRequest(http.MethodGet, "/login", nil)
 			w := httptest.NewRecorder()
 
-			handler.handleLoginGet()(w, req)
+			handler.HandleLoginGet()(w, req)
 
 			assert.Equal(t, tt.expectedStatus, w.Code)
 		})
@@ -152,25 +149,15 @@ func TestHandler_handleLoginPost(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			authMock := &AuthStoreMock{}
-			sessionMock := &SessionStoreMock{}
-			cookieMock := &CookieStoreMock{}
-
+			handler, authMock, sessionMock, cookieMock := NewHandlerfromMocks()
 			tt.mockSetup(authMock, sessionMock, cookieMock)
-
-			handler := &Handler{
-				auth:    authMock,
-				session: sessionMock,
-				cookie:  cookieMock,
-				log:     slog.Default(),
-			}
 
 			body := strings.NewReader(tt.formData.Encode())
 			req := httptest.NewRequest(http.MethodPost, "/login", body)
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			w := httptest.NewRecorder()
 
-			handler.handleLoginPost()(w, req)
+			handler.HandleLoginPost()(w, req)
 
 			assert.Equal(t, tt.expectedStatus, w.Code)
 
@@ -269,25 +256,15 @@ func TestHandler_handleSignupPost(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			authMock := &AuthStoreMock{}
-			sessionMock := &SessionStoreMock{}
-			cookieMock := &CookieStoreMock{}
-
+			handler, authMock, sessionMock, cookieMock := NewHandlerfromMocks()
 			tt.mockSetup(authMock, sessionMock, cookieMock)
-
-			handler := &Handler{
-				auth:    authMock,
-				session: sessionMock,
-				cookie:  cookieMock,
-				log:     slog.Default(),
-			}
 
 			body := strings.NewReader(tt.formData.Encode())
 			req := httptest.NewRequest(http.MethodPost, "/signup", body)
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			w := httptest.NewRecorder()
 
-			handler.handleSignupPost()(w, req)
+			handler.HandleSignupPost()(w, req)
 
 			assert.Equal(t, tt.expectedStatus, w.Code)
 
@@ -332,18 +309,13 @@ func TestHandler_handleAdminGet(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			authMock := &AuthStoreMock{}
+			handler, authMock, _, _ := NewHandlerfromMocks()
 			tt.mockSetup(authMock)
-
-			handler := &Handler{
-				auth: authMock,
-				log:  slog.Default(),
-			}
 
 			req := httptest.NewRequest(http.MethodGet, "/admin", nil)
 			w := httptest.NewRecorder()
 
-			handler.handleAdminGet()(w, req)
+			handler.HandleAdminGet()(w, req)
 
 			assert.Equal(t, tt.expectedStatus, w.Code)
 			authMock.AssertExpectations(t)
@@ -406,19 +378,14 @@ func TestHandler_handleAdminUserEnable(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			authMock := &AuthStoreMock{}
+			handler, authMock, _, _ := NewHandlerfromMocks()
 			tt.mockSetup(authMock)
-
-			handler := &Handler{
-				auth: authMock,
-				log:  slog.Default(),
-			}
 
 			req := httptest.NewRequest(http.MethodPost, "/admin/users/"+tt.pathID+"/enable", nil)
 			req.SetPathValue("id", tt.pathID)
 			w := httptest.NewRecorder()
 
-			handler.handleAdminUserEnable()(w, req)
+			handler.HandleAdminUserEnable()(w, req)
 
 			assert.Equal(t, tt.expectedStatus, w.Code)
 
@@ -478,19 +445,14 @@ func TestHandler_handleAdminUserDisable(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			authMock := &AuthStoreMock{}
+			handler, authMock, _, _ := NewHandlerfromMocks()
 			tt.mockSetup(authMock)
-
-			handler := &Handler{
-				auth: authMock,
-				log:  slog.Default(),
-			}
 
 			req := httptest.NewRequest(http.MethodPost, "/admin/users/"+tt.pathID+"/disable", nil)
 			req.SetPathValue("id", tt.pathID)
 			w := httptest.NewRecorder()
 
-			handler.handleAdminUserDisable()(w, req)
+			handler.HandleAdminUserDisable()(w, req)
 
 			assert.Equal(t, tt.expectedStatus, w.Code)
 
@@ -583,19 +545,14 @@ func TestHandler_handleAdminUserDelete(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			authMock := &AuthStoreMock{}
+			handler, authMock, _, _ := NewHandlerfromMocks()
 			tt.mockSetup(authMock)
-
-			handler := &Handler{
-				auth: authMock,
-				log:  slog.Default(),
-			}
 
 			req := httptest.NewRequest(http.MethodDelete, "/admin/users/"+tt.pathID, nil)
 			req.SetPathValue("id", tt.pathID)
 			w := httptest.NewRecorder()
 
-			handler.handleAdminUserDelete()(w, req)
+			handler.HandleAdminUserDelete()(w, req)
 
 			assert.Equal(t, tt.expectedStatus, w.Code)
 
