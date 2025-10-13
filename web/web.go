@@ -25,15 +25,14 @@ var templateFiles embed.FS
 // var staticFiles embed.FS
 
 type Handler struct {
-	auth      auth
-	session   session
-	cookie    cookie
-	log       *slog.Logger
-	baseRoute string
-	tmpl      *templateEngine
+	auth    auth
+	session session
+	cookie  cookie
+	log     *slog.Logger
+	tmpl    *templateEngine
 }
 
-func New(logger *slog.Logger, auth auth, session session, cookie cookie, baseRoute string) *Handler {
+func New(logger *slog.Logger, auth auth, session session, cookie cookie) *Handler {
 	funcMap := template.FuncMap{
 		"eq":  func(a, b any) bool { return a == b },
 		"mod": func(a, b int) int { return a % b },
@@ -49,12 +48,11 @@ func New(logger *slog.Logger, auth auth, session session, cookie cookie, baseRou
 	}
 
 	return &Handler{
-		auth:      auth,
-		session:   session,
-		cookie:    cookie,
-		log:       logger,
-		baseRoute: baseRoute,
-		tmpl:      &tmpl,
+		auth:    auth,
+		session: session,
+		cookie:  cookie,
+		log:     logger,
+		tmpl:    &tmpl,
 	}
 }
 

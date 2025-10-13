@@ -9,15 +9,9 @@ import (
 
 	"github.com/Ryan-Har/groundgo/api"
 	"github.com/Ryan-Har/groundgo/internal/sessionstore"
+	"github.com/Ryan-Har/groundgo/pkg/middlewarectx"
 	"github.com/Ryan-Har/groundgo/pkg/models"
 	"github.com/google/uuid"
-)
-
-type contextKey string
-
-const (
-	userContextKey contextKey = "user"
-	jwtContextKey  contextKey = "jwt"
 )
 
 // AuthenticationMiddleware is an HTTP middleware that extracts and validates
@@ -79,9 +73,7 @@ func (e *Enforcer) AuthenticationMiddleware(next http.Handler) http.Handler {
 		}
 
 		// Store the user and jwt string (if available) in the request context
-		ctx := context.WithValue(
-			context.WithValue(r.Context(), userContextKey, authUser),
-			jwtContextKey, tokenString)
+		ctx := middlewarectx.ContextWithUserAndJWT(r.Context(), authUser, tokenString)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
@@ -112,7 +104,7 @@ func (e *Enforcer) AuthenticationMiddleware(next http.Handler) http.Handler {
 func (e *Enforcer) AuthorizationMiddleware(path string, required models.Role) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			user, ok := UserFromContext(r.Context())
+			user, ok := middlewarectx.UserFromContext(r.Context())
 			if !ok {
 				e.log.Error("AuthorizationMiddleware expected User in http context and did not receive", "path", path)
 				e.respondForbidden(w, r)
@@ -310,22 +302,4 @@ func (e *Enforcer) respondMethodNotAllowed(w http.ResponseWriter, r *http.Reques
 	} else {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
-}
-
-func UserFromContext(ctx context.Context) (*models.User, bool) {
-	user, ok := ctx.Value(userContextKey).(*models.User)
-	return user, ok
-}
-
-func JWTFromContext(ctx context.Context) (string, bool) {
-	user, ok := ctx.Value(jwtContextKey).(string)
-	return user, ok
-}
-
-func ContextWithUser(ctx context.Context, user *models.User) context.Context {
-	return context.WithValue(ctx, userContextKey, user)
-}
-
-func ContextWithJWT(ctx context.Context, token string) context.Context {
-	return context.WithValue(ctx, jwtContextKey, token)
 }

@@ -5,23 +5,34 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/Ryan-Har/groundgo/api"
 	"github.com/Ryan-Har/groundgo/pkg/enforcer"
 	"github.com/Ryan-Har/groundgo/pkg/models"
+	"github.com/Ryan-Har/groundgo/pkg/store"
 	"github.com/Ryan-Har/groundgo/web"
 )
 
 type Builtin struct {
-	enforcer   *enforcer.Enforcer
-	handler    Handler
-	webhandler *web.Handler
+	enforcer     *enforcer.Enforcer
+	webhandler   *web.Handler
+	apihandler   *api.Handler
+	baseRoute    string
+	apiBaseRoute string
 }
 
 // New initializes and returns a new DefaultRoutes instance
-func New(logger *slog.Logger, enforcer *enforcer.Enforcer, auth auth, session session, token token, cookie cookie) *Builtin {
+func New(logger *slog.Logger,
+	enforcer *enforcer.Enforcer,
+	auth store.Authstore,
+	session store.Sessionstore,
+	token store.Tokenstore,
+	cookie store.Cookiestore) *Builtin {
 	return &Builtin{
-		enforcer:   enforcer,
-		handler:    *newHandler(logger, auth, session, token, cookie, "", "/groundgo/api/v1"),
-		webhandler: web.New(logger, auth, session, cookie, ""),
+		enforcer:     enforcer,
+		webhandler:   web.New(logger, auth, session, cookie),
+		apihandler:   api.New(logger, auth, session, token, cookie),
+		baseRoute:    "",
+		apiBaseRoute: "/groundgo/api/v1",
 	}
 }
 
@@ -48,7 +59,7 @@ func (b *Builtin) LoadAllPolicies() {
 }
 
 func (b *Builtin) LoadDefaultRootPolicy() {
-	b.enforcer.SetPolicy(b.handler.baseRoute+"/", "GET", models.RoleGuest)
+	b.enforcer.SetPolicy(b.baseRoute+"/", "GET", models.RoleGuest)
 }
 
 // SetDefaultLoginRoute configures the HTTP handlers for the user login process.
@@ -59,14 +70,14 @@ func (b *Builtin) LoadDefaultRootPolicy() {
 // session cookie upon successful authentication.
 func (b *Builtin) LoadDefaultLoginRoute() error {
 	return b.registerRoutes(map[string]http.HandlerFunc{
-		"GET " + b.handler.baseRoute + "/login": b.webhandler.HandleLoginGet(),
-		"POST " + b.handler.baseRoute + "/login": b.webhandler.HandleLoginPost(),
+		"GET " + b.baseRoute + "/login":  b.webhandler.HandleLoginGet(),
+		"POST " + b.baseRoute + "/login": b.webhandler.HandleLoginPost(),
 	})
 }
 
 func (b *Builtin) LoadDefaultLoginPolicies() {
-	b.enforcer.SetPolicy(b.handler.baseRoute+"/login", "GET", models.RoleGuest)
-	b.enforcer.SetPolicy(b.handler.baseRoute+"/login", "POST", models.RoleGuest)
+	b.enforcer.SetPolicy(b.baseRoute+"/login", "GET", models.RoleGuest)
+	b.enforcer.SetPolicy(b.baseRoute+"/login", "POST", models.RoleGuest)
 }
 
 // SetDefaultSignupRoute configures the HTTP handlers for the new user
@@ -78,14 +89,14 @@ func (b *Builtin) LoadDefaultLoginPolicies() {
 // new user account, and initiates a session.
 func (b *Builtin) LoadDefaultSignupRoute() error {
 	return b.registerRoutes(map[string]http.HandlerFunc{
-		"GET " + b.handler.baseRoute + "/signup":  b.webhandler.HandleSignupGet(),
-		"POST " + b.handler.baseRoute + "/signup": b.webhandler.HandleSignupPost(),
+		"GET " + b.baseRoute + "/signup":  b.webhandler.HandleSignupGet(),
+		"POST " + b.baseRoute + "/signup": b.webhandler.HandleSignupPost(),
 	})
 }
 
 func (b *Builtin) LoadDefaultSignupPolicies() {
-	b.enforcer.SetPolicy(b.handler.baseRoute+"/signup", "GET", models.RoleGuest)
-	b.enforcer.SetPolicy(b.handler.baseRoute+"/signup", "POST", models.RoleGuest)
+	b.enforcer.SetPolicy(b.baseRoute+"/signup", "GET", models.RoleGuest)
+	b.enforcer.SetPolicy(b.baseRoute+"/signup", "POST", models.RoleGuest)
 }
 
 // SetDefaultAdminRoute configures the HTTP handler for the admin dashboarb.
@@ -93,13 +104,13 @@ func (b *Builtin) LoadDefaultSignupPolicies() {
 // It defines multiple handlers for the various htmx interactive components.
 func (b *Builtin) LoadDefaultAdminRoute() error {
 	return b.registerRoutes(map[string]http.HandlerFunc{
-		"GET " + b.handler.baseRoute + "/admin":                     b.webhandler.HandleAdminGet(),
-		"GET " + b.handler.baseRoute + "/admin/users/{id}":          b.webhandler.HandleAdminUserRowGet(),
-		"GET " + b.handler.baseRoute + "/admin/users/{id}/edit-row": b.webhandler.HandleAdminUserRowEditGet(),
-		"PUT " + b.handler.baseRoute + "/admin/users/{id}":          b.webhandler.HandleAdminUserUpdatePut(),
-		"DELETE " + b.handler.baseRoute + "/admin/users/{id}":       b.webhandler.HandleAdminUserDelete(),
-		"POST " + b.handler.baseRoute + "/admin/users/{id}/disable": b.webhandler.HandleAdminUserDisable(),
-		"POST " + b.handler.baseRoute + "/admin/users/{id}/enable":  b.webhandler.HandleAdminUserEnable(),
+		"GET " + b.baseRoute + "/admin":                     b.webhandler.HandleAdminGet(),
+		"GET " + b.baseRoute + "/admin/users/{id}":          b.webhandler.HandleAdminUserRowGet(),
+		"GET " + b.baseRoute + "/admin/users/{id}/edit-row": b.webhandler.HandleAdminUserRowEditGet(),
+		"PUT " + b.baseRoute + "/admin/users/{id}":          b.webhandler.HandleAdminUserUpdatePut(),
+		"DELETE " + b.baseRoute + "/admin/users/{id}":       b.webhandler.HandleAdminUserDelete(),
+		"POST " + b.baseRoute + "/admin/users/{id}/disable": b.webhandler.HandleAdminUserDisable(),
+		"POST " + b.baseRoute + "/admin/users/{id}/enable":  b.webhandler.HandleAdminUserEnable(),
 	})
 }
 
@@ -110,36 +121,36 @@ func (b *Builtin) LoadDefaultAdminPolicies() {
 func (b *Builtin) LoadDefaultAPIRoutes() error {
 	return b.registerRoutes(map[string]http.HandlerFunc{
 		// auth
-		"POST " + b.handler.apiBaseRoute + "/auth/login":   b.handler.handleAPILoginPost(),
-		"POST " + b.handler.apiBaseRoute + "/auth/logout":  b.handler.handleAPILogoutPost(),
-		"POST " + b.handler.apiBaseRoute + "/auth/refresh": b.handler.handleAPITokenRefresh(),
-		"GET " + b.handler.apiBaseRoute + "/auth/verify":   b.handler.handleAPITokenVerify(),
+		"POST " + b.apiBaseRoute + "/auth/login":   b.apihandler.HandleAPILoginPost(),
+		"POST " + b.apiBaseRoute + "/auth/logout":  b.apihandler.HandleAPILogoutPost(),
+		"POST " + b.apiBaseRoute + "/auth/refresh": b.apihandler.HandleAPITokenRefresh(),
+		"GET " + b.apiBaseRoute + "/auth/verify":   b.apihandler.HandleAPITokenVerify(),
 		// users
-		"GET " + b.handler.apiBaseRoute + "/users":         b.handler.handleAPIGetUsers(),
-		"POST " + b.handler.apiBaseRoute + "/users":        b.handler.handleAPICreateUser(),
-		"GET " + b.handler.apiBaseRoute + "/users/{id}":    b.handler.handleAPIGetUserByID(),
-		"PATCH " + b.handler.apiBaseRoute + "/users/{id}":  b.handler.handleAPIUpdateUserByID(),
-		"DELETE " + b.handler.apiBaseRoute + "/users/{id}": b.handler.handleAPIDeleteUserByID(),
+		"GET " + b.apiBaseRoute + "/users":         b.apihandler.HandleAPIGetUsers(),
+		"POST " + b.apiBaseRoute + "/users":        b.apihandler.HandleAPICreateUser(),
+		"GET " + b.apiBaseRoute + "/users/{id}":    b.apihandler.HandleAPIGetUserByID(),
+		"PATCH " + b.apiBaseRoute + "/users/{id}":  b.apihandler.HandleAPIUpdateUserByID(),
+		"DELETE " + b.apiBaseRoute + "/users/{id}": b.apihandler.HandleAPIDeleteUserByID(),
 		//self
-		"GET " + b.handler.apiBaseRoute + "/users/me":                  b.handler.handleAPIGetOwnUser(),
-		"POST " + b.handler.apiBaseRoute + "/users/me/change-password": b.handler.HandleAPIChangeOwnPassword(),
+		"GET " + b.apiBaseRoute + "/users/me":                  b.apihandler.HandleAPIGetOwnUser(),
+		"POST " + b.apiBaseRoute + "/users/me/change-password": b.apihandler.HandleAPIChangeOwnPassword(),
 	})
 }
 
 func (b *Builtin) LoadDefaultAPIPolicies() {
-	b.enforcer.SetPolicy(b.handler.apiBaseRoute+"/auth/login", "POST", models.RoleGuest)
-	b.enforcer.SetPolicy(b.handler.apiBaseRoute+"/auth/logout", "POST", models.RoleGuest)
-	b.enforcer.SetPolicy(b.handler.apiBaseRoute+"/auth/refresh", "POST", models.RoleGuest)
-	b.enforcer.SetPolicy(b.handler.apiBaseRoute+"/auth/verify", "GET", models.RoleUser)
+	b.enforcer.SetPolicy(b.apiBaseRoute+"/auth/login", "POST", models.RoleGuest)
+	b.enforcer.SetPolicy(b.apiBaseRoute+"/auth/logout", "POST", models.RoleGuest)
+	b.enforcer.SetPolicy(b.apiBaseRoute+"/auth/refresh", "POST", models.RoleGuest)
+	b.enforcer.SetPolicy(b.apiBaseRoute+"/auth/verify", "GET", models.RoleUser)
 
-	b.enforcer.SetPolicy(b.handler.apiBaseRoute+"/users", "GET", models.RoleAdmin)
-	b.enforcer.SetPolicy(b.handler.apiBaseRoute+"/users", "POST", models.RoleAdmin)
-	b.enforcer.SetPolicy(b.handler.apiBaseRoute+"/users/{id}", "GET", models.RoleAdmin)
-	b.enforcer.SetPolicy(b.handler.apiBaseRoute+"/users/{id}", "PATCH", models.RoleAdmin)
-	b.enforcer.SetPolicy(b.handler.apiBaseRoute+"/users/{id}", "DELETE", models.RoleSystemAdmin)
+	b.enforcer.SetPolicy(b.apiBaseRoute+"/users", "GET", models.RoleAdmin)
+	b.enforcer.SetPolicy(b.apiBaseRoute+"/users", "POST", models.RoleAdmin)
+	b.enforcer.SetPolicy(b.apiBaseRoute+"/users/{id}", "GET", models.RoleAdmin)
+	b.enforcer.SetPolicy(b.apiBaseRoute+"/users/{id}", "PATCH", models.RoleAdmin)
+	b.enforcer.SetPolicy(b.apiBaseRoute+"/users/{id}", "DELETE", models.RoleSystemAdmin)
 
-	b.enforcer.SetPolicy(b.handler.apiBaseRoute+"/users/me", "GET", models.RoleUser)
-	b.enforcer.SetPolicy(b.handler.apiBaseRoute+"/users/me/change-password", "POST", models.RoleUser)
+	b.enforcer.SetPolicy(b.apiBaseRoute+"/users/me", "GET", models.RoleUser)
+	b.enforcer.SetPolicy(b.apiBaseRoute+"/users/me/change-password", "POST", models.RoleUser)
 }
 
 // registerRoutes registers a set of HTTP routes with their corresponding handlers.

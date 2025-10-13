@@ -27,7 +27,7 @@ func newHandlerfromMocks() (*Handler,
 	session := &testutil.SessionStoreMock{}
 	cookie := &testutil.CookieStoreMock{}
 
-	h := New(testutil.NoopLogger(), auth, session, cookie, "")
+	h := New(testutil.NoopLogger(), auth, session, cookie)
 	return h, auth, session, cookie
 }
 
