@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Ryan-Har/groundgo/internal/db"
+	"github.com/Ryan-Har/groundgo/internal/testutil"
 	"github.com/Ryan-Har/groundgo/internal/tokenstore"
 	"github.com/Ryan-Har/groundgo/pkg/enforcer"
 	"github.com/Ryan-Har/groundgo/pkg/models"
@@ -20,9 +21,24 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
+func newHandlerfromMocks() (*Handler,
+	*testutil.AuthStoreMock,
+	*testutil.SessionStoreMock,
+	*testutil.TokenStoreMock,
+	*testutil.CookieStoreMock) {
+
+	auth := &testutil.AuthStoreMock{}
+	session := &testutil.SessionStoreMock{}
+	token := &testutil.TokenStoreMock{}
+	cookie := &testutil.CookieStoreMock{}
+
+	h := newHandler(testutil.NoopLogger(), auth, session, token, cookie, "", "")
+	return h, auth, session, token, cookie
+}
+
 func TestHandler_handleAPITokenVerify(t *testing.T) {
 	const validToken = "valid-token"
-	handler, _, _, tokenMock, _ := NewHandlerfromMocks()
+	handler, _, _, tokenMock, _ := newHandlerfromMocks()
 
 	tests := []struct {
 		name           string
@@ -92,7 +108,7 @@ func TestHandler_handleAPITokenVerify(t *testing.T) {
 }
 
 func TestHandler_handleAPITokenRefresh(t *testing.T) {
-	handler, _, _, tokenMock, cookieMock := NewHandlerfromMocks()
+	handler, _, _, tokenMock, cookieMock := newHandlerfromMocks()
 
 	tests := []struct {
 		name           string
@@ -194,7 +210,7 @@ func TestHandler_handleAPITokenRefresh(t *testing.T) {
 func TestHandler_handleAPILoginPost(t *testing.T) {
 	validUserID := uuid.New()
 	validPasswordHash, _ := passwd.HashPassword("password123")
-	handler, authMock, _, tokenMock, cookieMock := NewHandlerfromMocks()
+	handler, authMock, _, tokenMock, cookieMock := newHandlerfromMocks()
 
 	tests := []struct {
 		name           string
@@ -311,7 +327,7 @@ func TestHandler_handleAPILoginPost(t *testing.T) {
 }
 
 func TestHandler_handleAPILogoutPost(t *testing.T) {
-	handler, _, _, tokenMock, cookieMock := NewHandlerfromMocks()
+	handler, _, _, tokenMock, cookieMock := newHandlerfromMocks()
 	validToken := "valid-access-token"
 
 	tests := []struct {
@@ -398,7 +414,7 @@ func TestHandler_handleAPILogoutPost(t *testing.T) {
 }
 
 func TestHandler_handleAPIGetUserByID(t *testing.T) {
-	handler, authMock, _, _, _ := NewHandlerfromMocks()
+	handler, authMock, _, _, _ := newHandlerfromMocks()
 	validUserID := uuid.New()
 
 	tests := []struct {
@@ -461,7 +477,7 @@ func TestHandler_handleAPIGetUserByID(t *testing.T) {
 }
 
 func TestHandler_handleAPIGetOwnUser(t *testing.T) {
-	handler, _, _, _, _ := NewHandlerfromMocks()
+	handler, _, _, _, _ := newHandlerfromMocks()
 	validUserID := uuid.New()
 
 	tests := []struct {
@@ -513,7 +529,7 @@ func TestHandler_handleAPIGetOwnUser(t *testing.T) {
 }
 
 func TestHandler_HandleAPIChangeOwnPassword(t *testing.T) {
-	handler, authMock, _, _, _ := NewHandlerfromMocks()
+	handler, authMock, _, _, _ := newHandlerfromMocks()
 	validUserID := uuid.New()
 	validPasswordHash, _ := passwd.HashPassword("currentpassword")
 
@@ -634,7 +650,7 @@ func TestHandler_HandleAPIChangeOwnPassword(t *testing.T) {
 }
 
 func TestHandler_handleAPIGetUsers(t *testing.T) {
-	handler, authMock, _, _, _ := NewHandlerfromMocks()
+	handler, authMock, _, _, _ := newHandlerfromMocks()
 
 	tests := []struct {
 		name           string
@@ -758,7 +774,7 @@ func TestHandler_handleAPIGetUsers(t *testing.T) {
 }
 
 func TestHandler_handleAPICreateUser(t *testing.T) {
-	handler, authMock, _, _, _ := NewHandlerfromMocks()
+	handler, authMock, _, _, _ := newHandlerfromMocks()
 
 	tests := []struct {
 		name           string
@@ -829,7 +845,7 @@ func TestHandler_handleAPICreateUser(t *testing.T) {
 }
 
 func TestHandler_handleAPIUpdateUserByID(t *testing.T) {
-	handler, authMock, _, _, _ := NewHandlerfromMocks()
+	handler, authMock, _, _, _ := newHandlerfromMocks()
 	validUserID := uuid.New()
 
 	tests := []struct {
@@ -925,7 +941,7 @@ func TestHandler_handleAPIUpdateUserByID(t *testing.T) {
 }
 
 func TestHandler_handleAPIDeleteUserByID(t *testing.T) {
-	handler, authMock, _, _, _ := NewHandlerfromMocks()
+	handler, authMock, _, _, _ := newHandlerfromMocks()
 	validUserID := uuid.New()
 
 	tests := []struct {
@@ -984,7 +1000,7 @@ func TestHandler_handleAPIDeleteUserByID(t *testing.T) {
 }
 
 func TestHandler_handleJSONDecodeError(t *testing.T) {
-	handler, _, _, _, _ := NewHandlerfromMocks()
+	handler, _, _, _, _ := newHandlerfromMocks()
 
 	tests := []struct {
 		name           string
@@ -1020,7 +1036,7 @@ func TestHandler_handleJSONDecodeError(t *testing.T) {
 }
 
 func TestHandler_handleErrors(t *testing.T) {
-	handler, _, _, _, _ := NewHandlerfromMocks()
+	handler, _, _, _, _ := newHandlerfromMocks()
 
 	tests := []struct {
 		name           string

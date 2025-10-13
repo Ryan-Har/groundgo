@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/Ryan-Har/groundgo/internal/sessionstore"
+	"github.com/Ryan-Har/groundgo/internal/testutil"
 	"github.com/Ryan-Har/groundgo/internal/tokenstore"
 	"github.com/Ryan-Har/groundgo/pkg/models"
 	"github.com/golang-jwt/jwt/v5"
@@ -18,7 +19,7 @@ import (
 )
 
 func Test_extractBearerToken(t *testing.T) {
-	enf, _, _, _, _ := NewEnforcerFromMocks()
+	enf, _, _, _, _ := newEnforcerFromMocks()
 
 	// valid (case-insensitive "Bearer")
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -51,14 +52,14 @@ func Test_extractBearerToken(t *testing.T) {
 func Test_validateTokenAndGetUser(t *testing.T) {
 	cases := []struct {
 		name        string
-		setupMocks  func(auth *AuthStoreMock, token *TokenStoreMock)
+		setupMocks  func(auth *testutil.AuthStoreMock, token *testutil.TokenStoreMock)
 		tokenString string
 		expectError bool
 		expectUser  bool
 	}{
 		{
 			name: "success path",
-			setupMocks: func(auth *AuthStoreMock, token *TokenStoreMock) {
+			setupMocks: func(auth *testutil.AuthStoreMock, token *testutil.TokenStoreMock) {
 				uid := uuid.New()
 
 				token.On("ParseAccessTokenAndValidate", mock.Anything, "good").
@@ -77,7 +78,7 @@ func Test_validateTokenAndGetUser(t *testing.T) {
 		},
 		{
 			name: "parse error",
-			setupMocks: func(auth *AuthStoreMock, token *TokenStoreMock) {
+			setupMocks: func(auth *testutil.AuthStoreMock, token *testutil.TokenStoreMock) {
 				token.On("ParseAccessTokenAndValidate", mock.Anything, "bad").
 					Return(nil, errors.New("parse fail"))
 			},
@@ -87,7 +88,7 @@ func Test_validateTokenAndGetUser(t *testing.T) {
 		},
 		{
 			name: "bad uuid in subject",
-			setupMocks: func(auth *AuthStoreMock, token *TokenStoreMock) {
+			setupMocks: func(auth *testutil.AuthStoreMock, token *testutil.TokenStoreMock) {
 				token.On("ParseAccessTokenAndValidate", mock.Anything, "oops").
 					Return(&tokenstore.AccessToken{
 						RegisteredClaims: jwt.RegisteredClaims{
@@ -101,7 +102,7 @@ func Test_validateTokenAndGetUser(t *testing.T) {
 		},
 		{
 			name: "user lookup error",
-			setupMocks: func(auth *AuthStoreMock, token *TokenStoreMock) {
+			setupMocks: func(auth *testutil.AuthStoreMock, token *testutil.TokenStoreMock) {
 				uid := uuid.New()
 
 				token.On("ParseAccessTokenAndValidate", mock.Anything, "good2").
@@ -122,7 +123,7 @@ func Test_validateTokenAndGetUser(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			enf, auth, _, token, _ := NewEnforcerFromMocks()
+			enf, auth, _, token, _ := newEnforcerFromMocks()
 			tc.setupMocks(auth, token)
 
 			user, err := enf.validateTokenAndGetUser(context.Background(), tc.tokenString)
@@ -149,7 +150,7 @@ func Test_getUserFromSession(t *testing.T) {
 	cases := []struct {
 		name           string
 		session        *models.Session
-		setupMocks     func(auth *AuthStoreMock, cookie *CookieStoreMock, uid uuid.UUID)
+		setupMocks     func(auth *testutil.AuthStoreMock, cookie *testutil.CookieStoreMock, uid uuid.UUID)
 		expectedError  bool
 		expectedRole   models.Role
 		expectedStatus int
@@ -157,7 +158,7 @@ func Test_getUserFromSession(t *testing.T) {
 		{
 			name:    "guest session returns guest user",
 			session: &models.Session{UserID: uuid.Nil},
-			setupMocks: func(auth *AuthStoreMock, cookie *CookieStoreMock, uid uuid.UUID) {
+			setupMocks: func(auth *testutil.AuthStoreMock, cookie *testutil.CookieStoreMock, uid uuid.UUID) {
 				// no mocks needed for guest
 			},
 			expectedError:  false,
@@ -167,7 +168,7 @@ func Test_getUserFromSession(t *testing.T) {
 		{
 			name:    "active user session",
 			session: &models.Session{UserID: uuid.New()},
-			setupMocks: func(auth *AuthStoreMock, cookie *CookieStoreMock, uid uuid.UUID) {
+			setupMocks: func(auth *testutil.AuthStoreMock, cookie *testutil.CookieStoreMock, uid uuid.UUID) {
 				auth.On("GetUserByID", mock.Anything, uid).
 					Return(&models.User{ID: uid, IsActive: true}, nil)
 			},
@@ -178,7 +179,7 @@ func Test_getUserFromSession(t *testing.T) {
 		{
 			name:    "inactive user causes redirect",
 			session: &models.Session{UserID: uuid.New()},
-			setupMocks: func(auth *AuthStoreMock, cookie *CookieStoreMock, uid uuid.UUID) {
+			setupMocks: func(auth *testutil.AuthStoreMock, cookie *testutil.CookieStoreMock, uid uuid.UUID) {
 				auth.On("GetUserByID", mock.Anything, uid).
 					Return(&models.User{ID: uid, IsActive: false}, nil)
 				cookie.On("ClearUserSessionCookie", mock.Anything).Return(nil)
@@ -191,7 +192,7 @@ func Test_getUserFromSession(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			enf, auth, _, _, cookie := NewEnforcerFromMocks()
+			enf, auth, _, _, cookie := newEnforcerFromMocks()
 			w := httptest.NewRecorder()
 			r := httptest.NewRequest(http.MethodGet, "/", nil)
 
@@ -240,7 +241,7 @@ func Test_handleSessionError(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			enf, _, _, _, cookie := NewEnforcerFromMocks() // grab cookie mock
+			enf, _, _, _, cookie := newEnforcerFromMocks() // grab cookie mock
 			req := httptest.NewRequest(http.MethodGet, "/", nil)
 			c := &http.Cookie{Name: "session_token", Value: "zzz"}
 			w := httptest.NewRecorder()
@@ -285,7 +286,7 @@ func Test_getSessionFromCookie(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			enf, _, sessionMock, _, _ := NewEnforcerFromMocks()
+			enf, _, sessionMock, _, _ := newEnforcerFromMocks()
 			req := tc.setupRequest()
 
 			// Only set up the mock if the test case actually has a cookie
@@ -397,7 +398,7 @@ func Test_tryJWTAuth(t *testing.T) {
 
 	cases := []struct {
 		name           string
-		setupMocks     func(auth *AuthStoreMock, token *TokenStoreMock)
+		setupMocks     func(auth *testutil.AuthStoreMock, token *testutil.TokenStoreMock)
 		setupRequest   func() *http.Request
 		expectOK       bool
 		expectUserID   uuid.UUID
@@ -405,7 +406,7 @@ func Test_tryJWTAuth(t *testing.T) {
 	}{
 		{
 			name: "valid JWT",
-			setupMocks: func(auth *AuthStoreMock, token *TokenStoreMock) {
+			setupMocks: func(auth *testutil.AuthStoreMock, token *testutil.TokenStoreMock) {
 				token.On("ParseAccessTokenAndValidate", mock.Anything, "tok").
 					Return(&tokenstore.AccessToken{RegisteredClaims: jwt.RegisteredClaims{Subject: uid.String()}}, nil)
 				auth.On("GetUserByID", mock.Anything, uid).
@@ -422,7 +423,7 @@ func Test_tryJWTAuth(t *testing.T) {
 		},
 		{
 			name:       "invalid header",
-			setupMocks: func(auth *AuthStoreMock, token *TokenStoreMock) {},
+			setupMocks: func(auth *testutil.AuthStoreMock, token *testutil.TokenStoreMock) {},
 			setupRequest: func() *http.Request {
 				return httptest.NewRequest(http.MethodGet, "/", nil)
 			},
@@ -430,7 +431,7 @@ func Test_tryJWTAuth(t *testing.T) {
 		},
 		{
 			name: "parse error",
-			setupMocks: func(auth *AuthStoreMock, token *TokenStoreMock) {
+			setupMocks: func(auth *testutil.AuthStoreMock, token *testutil.TokenStoreMock) {
 				token.On("ParseAccessTokenAndValidate", mock.Anything, "bad").
 					Return(nil, errors.New("nope"))
 			},
@@ -445,7 +446,7 @@ func Test_tryJWTAuth(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			enf, authMock, _, tokenMock, _ := NewEnforcerFromMocks()
+			enf, authMock, _, tokenMock, _ := newEnforcerFromMocks()
 			tc.setupMocks(authMock, tokenMock)
 
 			u, tok, ok := enf.tryJWTAuth(tc.setupRequest())
@@ -467,7 +468,7 @@ func Test_trySessionAuth(t *testing.T) {
 		name         string
 		sessionID    string
 		userID       uuid.UUID // the ID the session should return if valid
-		setupMocks   func(session *SessionStoreMock, auth *AuthStoreMock, cookie *CookieStoreMock, userID uuid.UUID)
+		setupMocks   func(session *testutil.SessionStoreMock, auth *testutil.AuthStoreMock, cookie *testutil.CookieStoreMock, userID uuid.UUID)
 		setupRequest func() *http.Request
 		expectOK     bool
 		expectStatus int
@@ -476,7 +477,7 @@ func Test_trySessionAuth(t *testing.T) {
 			name:      "valid guest session",
 			sessionID: "s1",
 			userID:    guestID,
-			setupMocks: func(session *SessionStoreMock, auth *AuthStoreMock, cookie *CookieStoreMock, userID uuid.UUID) {
+			setupMocks: func(session *testutil.SessionStoreMock, auth *testutil.AuthStoreMock, cookie *testutil.CookieStoreMock, userID uuid.UUID) {
 				session.On("Get", mock.Anything, "s1").
 					Return(&models.Session{UserID: userID}, nil)
 			},
@@ -492,7 +493,7 @@ func Test_trySessionAuth(t *testing.T) {
 			name:      "expired session",
 			sessionID: "expired",
 			userID:    uuid.Nil, // won't be used
-			setupMocks: func(session *SessionStoreMock, auth *AuthStoreMock, cookie *CookieStoreMock, userID uuid.UUID) {
+			setupMocks: func(session *testutil.SessionStoreMock, auth *testutil.AuthStoreMock, cookie *testutil.CookieStoreMock, userID uuid.UUID) {
 				session.On("Get", mock.Anything, "expired").
 					Return(nil, sessionstore.ErrSessionExpired)
 				cookie.On("ClearUserSessionCookie", mock.Anything).
@@ -510,7 +511,7 @@ func Test_trySessionAuth(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			enf, _, sessionMock, _, cookieMock := NewEnforcerFromMocks()
+			enf, _, sessionMock, _, cookieMock := newEnforcerFromMocks()
 			tc.setupMocks(sessionMock, nil, cookieMock, tc.userID)
 
 			w := httptest.NewRecorder()
@@ -557,7 +558,7 @@ func Test_responders_nonAPI(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			e, _, _, _, _ := NewEnforcerFromMocks()
+			e, _, _, _, _ := newEnforcerFromMocks()
 			req := tc.setupRequest()
 			w := httptest.NewRecorder()
 

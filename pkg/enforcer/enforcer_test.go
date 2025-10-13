@@ -1,13 +1,47 @@
 package enforcer
 
 import (
+	"net/http"
 	"strings"
 	"testing"
 
+	"github.com/Ryan-Har/groundgo/internal/testutil"
 	"github.com/Ryan-Har/groundgo/pkg/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// newEnforcerFromMocks is a helper which provides an enforcer type with mocks
+func newEnforcerFromMocks() (*Enforcer,
+	*testutil.AuthStoreMock,
+	*testutil.SessionStoreMock,
+	*testutil.TokenStoreMock,
+	*testutil.CookieStoreMock) {
+
+	auth := &testutil.AuthStoreMock{}
+	session := &testutil.SessionStoreMock{}
+	token := &testutil.TokenStoreMock{}
+	cookie := &testutil.CookieStoreMock{}
+
+	cfg := &EnforcerConfig{
+		Logger:             testutil.NoopLogger(),
+		Router:             http.NewServeMux(),
+		Auth:               auth,
+		Session:            session,
+		Token:              token,
+		Cookie:             cookie,
+		APIRequestDetector: defaultAPIDetector,
+	}
+
+	enf, _ := New(cfg)
+	return enf, auth, session, token, cookie
+}
+
+// dummyHandler is a simple handler that writes a known value
+func dummyHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusTeapot) // 418 I'm a teapot
+	w.Write([]byte("teapot"))
+}
 
 // --- buildPrefixes tests ---
 func TestBuildPrefixes(t *testing.T) {
@@ -83,7 +117,7 @@ func TestBuildPrefixes(t *testing.T) {
 
 // Additional FindMatchingPolicy tests for HTTP-specific scenarios
 func TestFindMatchingPolicyHTTPScenarios(t *testing.T) {
-	enf, _, _, _, _ := NewEnforcerFromMocks()
+	enf, _, _, _, _ := newEnforcerFromMocks()
 
 	// Setup realistic HTTP route policies
 	enf.SetPolicy("/api/v1/users", "GET", models.RoleUser)
@@ -242,7 +276,7 @@ func TestPolicyMatching(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			enf, _, _, _, _ := NewEnforcerFromMocks()
+			enf, _, _, _, _ := newEnforcerFromMocks()
 			tc.setupPolicies(enf)
 
 			role, found := enf.FindMatchingPolicy(tc.path, tc.method)
@@ -253,7 +287,7 @@ func TestPolicyMatching(t *testing.T) {
 }
 
 func TestSetPolicyStoresUppercaseMethods(t *testing.T) {
-	enf, _, _, _, _ := NewEnforcerFromMocks()
+	enf, _, _, _, _ := newEnforcerFromMocks()
 	enf.SetPolicy("/some/path", "get", models.RoleAdmin)
 	require.Equal(t, models.RoleAdmin, enf.Policies["/some/path"]["GET"])
 }

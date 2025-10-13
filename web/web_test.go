@@ -9,12 +9,27 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Ryan-Har/groundgo/internal/testutil"
 	"github.com/Ryan-Har/groundgo/pkg/models"
 	"github.com/Ryan-Har/groundgo/pkg/models/passwd"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
+
+// helper to generate web handler from mocks
+func newHandlerfromMocks() (*Handler,
+	*testutil.AuthStoreMock,
+	*testutil.SessionStoreMock,
+	*testutil.CookieStoreMock) {
+
+	auth := &testutil.AuthStoreMock{}
+	session := &testutil.SessionStoreMock{}
+	cookie := &testutil.CookieStoreMock{}
+
+	h := New(testutil.NoopLogger(), auth, session, cookie, "")
+	return h, auth, session, cookie
+}
 
 func TestHandler_handleLoginGet(t *testing.T) {
 	tests := []*struct {
@@ -29,7 +44,7 @@ func TestHandler_handleLoginGet(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler, _, _, _ := NewHandlerfromMocks()
+			handler, _, _, _ := newHandlerfromMocks()
 
 			req := httptest.NewRequest(http.MethodGet, "/login", nil)
 			w := httptest.NewRecorder()
@@ -48,7 +63,7 @@ func TestHandler_handleLoginPost(t *testing.T) {
 	tests := []*struct {
 		name           string
 		formData       url.Values
-		mockSetup      func(*AuthStoreMock, *SessionStoreMock, *CookieStoreMock)
+		mockSetup      func(*testutil.AuthStoreMock, *testutil.SessionStoreMock, *testutil.CookieStoreMock)
 		expectedStatus int
 		expectRedirect bool
 	}{
@@ -58,7 +73,7 @@ func TestHandler_handleLoginPost(t *testing.T) {
 				"email":    []string{"test@example.com"},
 				"password": []string{"password123"},
 			},
-			mockSetup: func(authMock *AuthStoreMock, sessionMock *SessionStoreMock, cookieMock *CookieStoreMock) {
+			mockSetup: func(authMock *testutil.AuthStoreMock, sessionMock *testutil.SessionStoreMock, cookieMock *testutil.CookieStoreMock) {
 				user := &models.User{
 					ID:           validUserID,
 					Email:        "test@example.com",
@@ -84,7 +99,7 @@ func TestHandler_handleLoginPost(t *testing.T) {
 				"email":    []string{"notfound@example.com"},
 				"password": []string{"password123"},
 			},
-			mockSetup: func(authMock *AuthStoreMock, sessionMock *SessionStoreMock, cookieMock *CookieStoreMock) {
+			mockSetup: func(authMock *testutil.AuthStoreMock, sessionMock *testutil.SessionStoreMock, cookieMock *testutil.CookieStoreMock) {
 				authMock.On("GetUserByEmail", mock.Anything, "notfound@example.com").Return(nil, errors.New("user not found"))
 			},
 			expectedStatus: http.StatusOK, // renders login error template
@@ -96,7 +111,7 @@ func TestHandler_handleLoginPost(t *testing.T) {
 				"email":    []string{"inactive@example.com"},
 				"password": []string{"password123"},
 			},
-			mockSetup: func(authMock *AuthStoreMock, sessionMock *SessionStoreMock, cookieMock *CookieStoreMock) {
+			mockSetup: func(authMock *testutil.AuthStoreMock, sessionMock *testutil.SessionStoreMock, cookieMock *testutil.CookieStoreMock) {
 				user := &models.User{
 					ID:           validUserID,
 					Email:        "inactive@example.com",
@@ -114,7 +129,7 @@ func TestHandler_handleLoginPost(t *testing.T) {
 				"email":    []string{"test@example.com"},
 				"password": []string{"wrongpassword"},
 			},
-			mockSetup: func(authMock *AuthStoreMock, sessionMock *SessionStoreMock, cookieMock *CookieStoreMock) {
+			mockSetup: func(authMock *testutil.AuthStoreMock, sessionMock *testutil.SessionStoreMock, cookieMock *testutil.CookieStoreMock) {
 				user := &models.User{
 					ID:           validUserID,
 					Email:        "test@example.com",
@@ -132,7 +147,7 @@ func TestHandler_handleLoginPost(t *testing.T) {
 				"email":    []string{"test@example.com"},
 				"password": []string{"password123"},
 			},
-			mockSetup: func(authMock *AuthStoreMock, sessionMock *SessionStoreMock, cookieMock *CookieStoreMock) {
+			mockSetup: func(authMock *testutil.AuthStoreMock, sessionMock *testutil.SessionStoreMock, cookieMock *testutil.CookieStoreMock) {
 				user := &models.User{
 					ID:           validUserID,
 					Email:        "test@example.com",
@@ -149,7 +164,7 @@ func TestHandler_handleLoginPost(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler, authMock, sessionMock, cookieMock := NewHandlerfromMocks()
+			handler, authMock, sessionMock, cookieMock := newHandlerfromMocks()
 			tt.mockSetup(authMock, sessionMock, cookieMock)
 
 			body := strings.NewReader(tt.formData.Encode())
@@ -180,7 +195,7 @@ func TestHandler_handleSignupPost(t *testing.T) {
 	tests := []*struct {
 		name           string
 		formData       url.Values
-		mockSetup      func(*AuthStoreMock, *SessionStoreMock, *CookieStoreMock)
+		mockSetup      func(*testutil.AuthStoreMock, *testutil.SessionStoreMock, *testutil.CookieStoreMock)
 		expectedStatus int
 		expectRedirect bool
 	}{
@@ -191,7 +206,7 @@ func TestHandler_handleSignupPost(t *testing.T) {
 				"password": []string{"password123"},
 				"confirm":  []string{"password123"},
 			},
-			mockSetup: func(authMock *AuthStoreMock, sessionMock *SessionStoreMock, cookieMock *CookieStoreMock) {
+			mockSetup: func(authMock *testutil.AuthStoreMock, sessionMock *testutil.SessionStoreMock, cookieMock *testutil.CookieStoreMock) {
 				user := &models.User{
 					ID:    validUserID,
 					Email: "new@example.com",
@@ -219,7 +234,7 @@ func TestHandler_handleSignupPost(t *testing.T) {
 				"password": []string{"password123"},
 				"confirm":  []string{"different"},
 			},
-			mockSetup: func(authMock *AuthStoreMock, sessionMock *SessionStoreMock, cookieMock *CookieStoreMock) {
+			mockSetup: func(authMock *testutil.AuthStoreMock, sessionMock *testutil.SessionStoreMock, cookieMock *testutil.CookieStoreMock) {
 				// no mock calls expected
 			},
 			expectedStatus: http.StatusOK, // renders signup error template
@@ -232,7 +247,7 @@ func TestHandler_handleSignupPost(t *testing.T) {
 				"password": []string{"password123"},
 				"confirm":  []string{"password123"},
 			},
-			mockSetup: func(authMock *AuthStoreMock, sessionMock *SessionStoreMock, cookieMock *CookieStoreMock) {
+			mockSetup: func(authMock *testutil.AuthStoreMock, sessionMock *testutil.SessionStoreMock, cookieMock *testutil.CookieStoreMock) {
 				authMock.On("CheckEmailExists", mock.Anything, "existing@example.com").Return(true, nil)
 			},
 			expectedStatus: http.StatusOK, // renders signup error template
@@ -245,7 +260,7 @@ func TestHandler_handleSignupPost(t *testing.T) {
 				"password": []string{"password123"},
 				"confirm":  []string{"password123"},
 			},
-			mockSetup: func(authMock *AuthStoreMock, sessionMock *SessionStoreMock, cookieMock *CookieStoreMock) {
+			mockSetup: func(authMock *testutil.AuthStoreMock, sessionMock *testutil.SessionStoreMock, cookieMock *testutil.CookieStoreMock) {
 				authMock.On("CheckEmailExists", mock.Anything, "new@example.com").Return(false, nil)
 				authMock.On("CreateUser", mock.Anything, mock.AnythingOfType("models.CreateUserParams")).Return(nil, errors.New("creation failed"))
 			},
@@ -256,7 +271,7 @@ func TestHandler_handleSignupPost(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler, authMock, sessionMock, cookieMock := NewHandlerfromMocks()
+			handler, authMock, sessionMock, cookieMock := newHandlerfromMocks()
 			tt.mockSetup(authMock, sessionMock, cookieMock)
 
 			body := strings.NewReader(tt.formData.Encode())
@@ -284,12 +299,12 @@ func TestHandler_handleSignupPost(t *testing.T) {
 func TestHandler_handleAdminGet(t *testing.T) {
 	tests := []*struct {
 		name           string
-		mockSetup      func(*AuthStoreMock)
+		mockSetup      func(*testutil.AuthStoreMock)
 		expectedStatus int
 	}{
 		{
 			name: "successful admin page render",
-			mockSetup: func(authMock *AuthStoreMock) {
+			mockSetup: func(authMock *testutil.AuthStoreMock) {
 				users := []*models.User{
 					{ID: uuid.New(), Email: "user1@example.com"},
 					{ID: uuid.New(), Email: "user2@example.com"},
@@ -300,7 +315,7 @@ func TestHandler_handleAdminGet(t *testing.T) {
 		},
 		{
 			name: "list users fails",
-			mockSetup: func(authMock *AuthStoreMock) {
+			mockSetup: func(authMock *testutil.AuthStoreMock) {
 				authMock.On("ListAllUsers", mock.Anything).Return(nil, errors.New("database error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -309,7 +324,7 @@ func TestHandler_handleAdminGet(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler, authMock, _, _ := NewHandlerfromMocks()
+			handler, authMock, _, _ := newHandlerfromMocks()
 			tt.mockSetup(authMock)
 
 			req := httptest.NewRequest(http.MethodGet, "/admin", nil)
@@ -329,14 +344,14 @@ func TestHandler_handleAdminUserEnable(t *testing.T) {
 	tests := []*struct {
 		name           string
 		pathID         string
-		mockSetup      func(*AuthStoreMock)
+		mockSetup      func(*testutil.AuthStoreMock)
 		expectedStatus int
 		expectHeader   bool
 	}{
 		{
 			name:   "successful user enable",
 			pathID: validUserID.String(),
-			mockSetup: func(authMock *AuthStoreMock) {
+			mockSetup: func(authMock *testutil.AuthStoreMock) {
 				user := &models.User{
 					ID:       validUserID,
 					Email:    "test@example.com",
@@ -351,14 +366,14 @@ func TestHandler_handleAdminUserEnable(t *testing.T) {
 		{
 			name:           "invalid UUID",
 			pathID:         "invalid-uuid",
-			mockSetup:      func(authMock *AuthStoreMock) {}, // no calls expected
+			mockSetup:      func(authMock *testutil.AuthStoreMock) {}, // no calls expected
 			expectedStatus: http.StatusBadRequest,
 			expectHeader:   false,
 		},
 		{
 			name:   "restore user fails",
 			pathID: validUserID.String(),
-			mockSetup: func(authMock *AuthStoreMock) {
+			mockSetup: func(authMock *testutil.AuthStoreMock) {
 				authMock.On("RestoreUser", mock.Anything, validUserID).Return(errors.New("database error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -367,7 +382,7 @@ func TestHandler_handleAdminUserEnable(t *testing.T) {
 		{
 			name:   "get user after restore fails",
 			pathID: validUserID.String(),
-			mockSetup: func(authMock *AuthStoreMock) {
+			mockSetup: func(authMock *testutil.AuthStoreMock) {
 				authMock.On("RestoreUser", mock.Anything, validUserID).Return(nil)
 				authMock.On("GetUserByID", mock.Anything, validUserID).Return(nil, errors.New("user not found"))
 			},
@@ -378,7 +393,7 @@ func TestHandler_handleAdminUserEnable(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler, authMock, _, _ := NewHandlerfromMocks()
+			handler, authMock, _, _ := newHandlerfromMocks()
 			tt.mockSetup(authMock)
 
 			req := httptest.NewRequest(http.MethodPost, "/admin/users/"+tt.pathID+"/enable", nil)
@@ -406,14 +421,14 @@ func TestHandler_handleAdminUserDisable(t *testing.T) {
 	tests := []*struct {
 		name           string
 		pathID         string
-		mockSetup      func(*AuthStoreMock)
+		mockSetup      func(*testutil.AuthStoreMock)
 		expectedStatus int
 		expectHeader   bool
 	}{
 		{
 			name:   "successful user disable",
 			pathID: validUserID.String(),
-			mockSetup: func(authMock *AuthStoreMock) {
+			mockSetup: func(authMock *testutil.AuthStoreMock) {
 				user := &models.User{
 					ID:       validUserID,
 					Email:    "test@example.com",
@@ -428,14 +443,14 @@ func TestHandler_handleAdminUserDisable(t *testing.T) {
 		{
 			name:           "invalid UUID",
 			pathID:         "invalid-uuid",
-			mockSetup:      func(authMock *AuthStoreMock) {}, // no calls expected
+			mockSetup:      func(authMock *testutil.AuthStoreMock) {}, // no calls expected
 			expectedStatus: http.StatusBadRequest,
 			expectHeader:   false,
 		},
 		{
 			name:   "soft delete fails",
 			pathID: validUserID.String(),
-			mockSetup: func(authMock *AuthStoreMock) {
+			mockSetup: func(authMock *testutil.AuthStoreMock) {
 				authMock.On("SoftDeleteUser", mock.Anything, validUserID).Return(errors.New("database error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -445,7 +460,7 @@ func TestHandler_handleAdminUserDisable(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler, authMock, _, _ := NewHandlerfromMocks()
+			handler, authMock, _, _ := newHandlerfromMocks()
 			tt.mockSetup(authMock)
 
 			req := httptest.NewRequest(http.MethodPost, "/admin/users/"+tt.pathID+"/disable", nil)
@@ -473,14 +488,14 @@ func TestHandler_handleAdminUserDelete(t *testing.T) {
 	tests := []*struct {
 		name           string
 		pathID         string
-		mockSetup      func(*AuthStoreMock)
+		mockSetup      func(*testutil.AuthStoreMock)
 		expectedStatus int
 		expectedHeader string
 	}{
 		{
 			name:   "successful delete active regular user",
 			pathID: validUserID.String(),
-			mockSetup: func(authMock *AuthStoreMock) {
+			mockSetup: func(authMock *testutil.AuthStoreMock) {
 				user := &models.User{
 					ID:       validUserID,
 					Email:    "test@example.com",
@@ -496,7 +511,7 @@ func TestHandler_handleAdminUserDelete(t *testing.T) {
 		{
 			name:   "successful delete active admin user",
 			pathID: validUserID.String(),
-			mockSetup: func(authMock *AuthStoreMock) {
+			mockSetup: func(authMock *testutil.AuthStoreMock) {
 				user := &models.User{
 					ID:       validUserID,
 					Email:    "admin@example.com",
@@ -512,14 +527,14 @@ func TestHandler_handleAdminUserDelete(t *testing.T) {
 		{
 			name:           "invalid UUID",
 			pathID:         "invalid-uuid",
-			mockSetup:      func(authMock *AuthStoreMock) {}, // no calls expected
+			mockSetup:      func(authMock *testutil.AuthStoreMock) {}, // no calls expected
 			expectedStatus: http.StatusBadRequest,
 			expectedHeader: "",
 		},
 		{
 			name:   "get user fails",
 			pathID: validUserID.String(),
-			mockSetup: func(authMock *AuthStoreMock) {
+			mockSetup: func(authMock *testutil.AuthStoreMock) {
 				authMock.On("GetUserByID", mock.Anything, validUserID).Return(nil, errors.New("user not found"))
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -528,7 +543,7 @@ func TestHandler_handleAdminUserDelete(t *testing.T) {
 		{
 			name:   "hard delete fails",
 			pathID: validUserID.String(),
-			mockSetup: func(authMock *AuthStoreMock) {
+			mockSetup: func(authMock *testutil.AuthStoreMock) {
 				user := &models.User{
 					ID:       validUserID,
 					Email:    "test@example.com",
@@ -545,7 +560,7 @@ func TestHandler_handleAdminUserDelete(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler, authMock, _, _ := NewHandlerfromMocks()
+			handler, authMock, _, _ := newHandlerfromMocks()
 			tt.mockSetup(authMock)
 
 			req := httptest.NewRequest(http.MethodDelete, "/admin/users/"+tt.pathID, nil)

@@ -84,7 +84,7 @@ func TestHandleRoutes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			enf, _, _, _, _ := NewEnforcerFromMocks()
+			enf, _, _, _, _ := newEnforcerFromMocks()
 
 			// For duplicate test, register first time
 			if tt.name == "Duplicate route" {
@@ -174,7 +174,7 @@ func TestDispatcher(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			enf, _, _, _, _ := NewEnforcerFromMocks()
+			enf, _, _, _, _ := newEnforcerFromMocks()
 
 			// Register handler if needed
 			if tt.register != "" {
@@ -242,7 +242,7 @@ func BenchmarkParseRoute(b *testing.B) {
 func BenchmarkHandle(b *testing.B) {
 	handler := http.HandlerFunc(dummyHandler)
 	for i := 0; i < b.N; i++ {
-		e, _, _, _, _ := NewEnforcerFromMocks()
+		e, _, _, _, _ := newEnforcerFromMocks()
 		route := "GET /benchmark/" + strconv.Itoa(i%1000)
 		e.Handle(route, handler)
 	}
