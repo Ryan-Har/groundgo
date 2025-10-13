@@ -120,15 +120,12 @@ func (t *templateEngine) RenderPage(w http.ResponseWriter, pageName string, data
 
 func (h *Handler) HandleLoginGet() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 		h.tmpl.RenderPage(w, "login_page", nil, "Login")
 	}
 }
 
 func (h *Handler) HandleLoginPost() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
-
 		if err := r.ParseForm(); err != nil {
 			h.log.Error("parsing form from POST /login", "err", err)
 			http.Error(w, "Invalid form", http.StatusBadRequest)
@@ -164,15 +161,12 @@ func (h *Handler) HandleLoginPost() http.HandlerFunc {
 
 func (h *Handler) HandleSignupGet() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 		h.tmpl.RenderPage(w, "signup_page", nil, "Signup")
 	}
 }
 
 func (h *Handler) HandleSignupPost() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
-
 		if err := r.ParseForm(); err != nil {
 			h.log.Error("parsing form from POST /signup", "err", err)
 			http.Error(w, "Invalid form", http.StatusBadRequest)
@@ -222,8 +216,6 @@ func (h *Handler) HandleSignupPost() http.HandlerFunc {
 
 func (h *Handler) HandleAdminGet() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
-
 		users, err := h.auth.ListAllUsers(r.Context())
 		if err != nil {
 			h.log.Error("unable to list users", "err", err)
@@ -238,7 +230,6 @@ func (h *Handler) HandleAdminGet() http.HandlerFunc {
 
 func (h *Handler) HandleAdminUserRowGet() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 
 		id := r.PathValue("id")
 		usrID, err := uuid.Parse(id)
@@ -262,7 +253,6 @@ func (h *Handler) HandleAdminUserRowGet() http.HandlerFunc {
 
 func (h *Handler) HandleAdminUserRowEditGet() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 
 		id := r.PathValue("id")
 		usrID, err := uuid.Parse(id)
@@ -286,7 +276,6 @@ func (h *Handler) HandleAdminUserRowEditGet() http.HandlerFunc {
 
 func (h *Handler) HandleAdminUserUpdatePut() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 
 		id := r.PathValue("id")
 		usrID, err := uuid.Parse(id)
@@ -347,7 +336,6 @@ func (h *Handler) HandleAdminUserUpdatePut() http.HandlerFunc {
 
 func (h *Handler) HandleAdminUserDelete() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 
 		id := r.PathValue("id")
 		usrID, err := uuid.Parse(id)
@@ -392,7 +380,6 @@ func (h *Handler) HandleAdminUserDelete() http.HandlerFunc {
 
 func (h *Handler) HandleAdminUserDisable() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 
 		id := r.PathValue("id")
 		usrID, err := uuid.Parse(id)
@@ -424,7 +411,6 @@ func (h *Handler) HandleAdminUserDisable() http.HandlerFunc {
 
 func (h *Handler) HandleAdminUserEnable() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 
 		id := r.PathValue("id")
 		usrID, err := uuid.Parse(id)

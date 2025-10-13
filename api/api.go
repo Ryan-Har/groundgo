@@ -37,7 +37,6 @@ func New(logger *slog.Logger, auth auth, session session, token token, cookie co
 
 func (h *Handler) HandleAPITokenVerify() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 
 		// middleware will have already denied the user by this point
 		tokenstr, ok := middlewarectx.JWTFromContext(r.Context())
@@ -62,7 +61,6 @@ func (h *Handler) HandleAPITokenVerify() http.HandlerFunc {
 
 func (h *Handler) HandleAPITokenRefresh() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 
 		refreshTokenCookie, err := r.Cookie("refresh_token")
 		if err != nil {
@@ -104,7 +102,6 @@ func (h *Handler) HandleAPITokenRefresh() http.HandlerFunc {
 
 func (h *Handler) HandleAPILoginPost() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 
 		var creds LoginRequest
 
@@ -153,7 +150,6 @@ func (h *Handler) HandleAPILoginPost() http.HandlerFunc {
 
 func (h *Handler) HandleAPILogoutPost() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 
 		tokenstr, ok := middlewarectx.JWTFromContext(r.Context())
 		if !ok || tokenstr == "" {
@@ -187,7 +183,6 @@ func (h *Handler) HandleAPILogoutPost() http.HandlerFunc {
 
 func (h *Handler) HandleAPIGetUserByID() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 
 		id := r.PathValue("id")
 		usrID, err := uuid.Parse(id)
@@ -213,7 +208,6 @@ func (h *Handler) HandleAPIGetUserByID() http.HandlerFunc {
 
 func (h *Handler) HandleAPIGetOwnUser() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 
 		// something has gone wrong with the middleware
 		user, ok := middlewarectx.UserFromContext(r.Context())
@@ -237,7 +231,6 @@ func (h *Handler) HandleAPIGetOwnUser() http.HandlerFunc {
 
 func (h *Handler) HandleAPIChangeOwnPassword() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 
 		var puReq PasswordUpdateRequest
 
@@ -284,7 +277,6 @@ func (h *Handler) HandleAPIChangeOwnPassword() http.HandlerFunc {
 
 func (h *Handler) HandleAPIGetUsers() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 
 		var params models.GetPaginatedUsersParams
 		q := r.URL.Query()
@@ -369,7 +361,6 @@ func (h *Handler) HandleAPIGetUsers() http.HandlerFunc {
 
 func (h *Handler) HandleAPICreateUser() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 
 		var params models.CreateUserParams
 
@@ -395,7 +386,6 @@ func (h *Handler) HandleAPICreateUser() http.HandlerFunc {
 
 func (h *Handler) HandleAPIUpdateUserByID() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 
 		id := r.PathValue("id")
 		usrID, err := uuid.Parse(id)
@@ -433,7 +423,6 @@ func (h *Handler) HandleAPIUpdateUserByID() http.HandlerFunc {
 
 func (h *Handler) HandleAPIDeleteUserByID() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		h.log.Debug("Access", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())
 
 		id := r.PathValue("id")
 		usrID, err := uuid.Parse(id)

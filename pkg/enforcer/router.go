@@ -2,6 +2,7 @@ package enforcer
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -45,7 +46,7 @@ func (e *Enforcer) Handle(route string, handler http.Handler) error {
 
 		// Register the dispatching handler once
 		e.router.Handle(path, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			defer logutil.NewTimingLogger(e.log, time.Now(), "access handled", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())()
+			defer logutil.NewTimingLoggerWithLevel(e.log, slog.LevelInfo, time.Now(), "access handled", "method", r.Method, "path", r.URL.Path, "remote_ip", r.RemoteAddr, "user_agent", r.UserAgent())()
 			methodHandlers := e.handlers[path]
 
 			// Try exact method match first
