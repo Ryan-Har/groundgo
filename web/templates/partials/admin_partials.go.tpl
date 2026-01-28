@@ -292,6 +292,7 @@
 			</th>
 			<th>User</th>
 			<th>Status</th>
+			<th>Role</th>
 			<th>Claims</th>
 			<th>Last Update</th>
 			<th>Created</th>
@@ -325,6 +326,10 @@
     {{ else }}
       <span class="tag is-warning">Inactive</span>
     {{ end }}
+  </td>
+
+  <td>
+    <p class="is-size-7 has-text-grey">{{ .Role }}</p>
   </td>
 
   <td>

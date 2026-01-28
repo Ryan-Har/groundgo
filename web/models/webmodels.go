@@ -33,6 +33,7 @@ type AdminPageUserTableCtx struct {
 type AdminPageUserTableRowCtx struct {
 	ID        string
 	Email     string
+	Role      string
 	IsActive  bool
 	Claims    []string
 	UpdatedAt string
@@ -67,6 +68,7 @@ func BuildAdminPageUserTableRowCtx(user *models.User) AdminPageUserTableRowCtx {
 		ID:        user.ID.String(),
 		Email:     user.Email,
 		IsActive:  user.IsActive,
+		Role:      user.Role.String(),
 		Claims:    user.Claims.AsSlice(),
 		UpdatedAt: user.UpdatedAt.Format(time.RFC3339),
 		CreatedAt: user.CreatedAt.Format(time.RFC3339),
