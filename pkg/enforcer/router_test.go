@@ -131,20 +131,23 @@ func TestDispatcher(t *testing.T) {
 		{
 			name:       "Exact method match",
 			register:   "GET /hello",
-			registerFn: func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("GET handler")) },
+			registerFn: func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("GET handler")) },
 			reqMethod:  "GET",
 			reqPath:    "/hello",
 			wantCode:   200,
 			wantBody:   "GET handler",
 		},
 		{
-			name:       "Wildcard fallback",
-			register:   "/hello",
-			registerFn: func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(201); w.Write([]byte("WILDCARD handler")) },
-			reqMethod:  "POST",
-			reqPath:    "/hello",
-			wantCode:   201,
-			wantBody:   "WILDCARD handler",
+			name:     "Wildcard fallback",
+			register: "/hello",
+			registerFn: func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(201)
+				_, _ = w.Write([]byte("WILDCARD handler"))
+			},
+			reqMethod: "POST",
+			reqPath:   "/hello",
+			wantCode:  201,
+			wantBody:  "WILDCARD handler",
 		},
 		{
 			name:       "Unknown method returns 405",
@@ -182,7 +185,7 @@ func TestDispatcher(t *testing.T) {
 				if tt.registerFn != nil {
 					handler = tt.registerFn
 				}
-				enf.Handle(tt.register, handler)
+				_ = enf.Handle(tt.register, handler)
 			}
 
 			dispatcher := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -244,6 +247,6 @@ func BenchmarkHandle(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		e, _, _, _, _ := newEnforcerFromMocks()
 		route := "GET /benchmark/" + strconv.Itoa(i%1000)
-		e.Handle(route, handler)
+		_ = e.Handle(route, handler)
 	}
 }

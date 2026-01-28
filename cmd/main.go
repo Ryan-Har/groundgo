@@ -38,9 +38,12 @@ func main() {
 	}
 
 	gg.Builtin.LoadAllPolicies()
-	gg.Enforcer.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Hello from the main application root!"))
+	err = gg.Enforcer.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("Hello from the main application root!"))
 	})
+	if err != nil {
+		slog.Error(err.Error())
+	}
 	err = gg.Builtin.LoadAllRoutes()
 	if err != nil {
 		slog.Error(err.Error())

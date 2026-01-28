@@ -40,7 +40,7 @@ func newEnforcerFromMocks() (*Enforcer,
 // dummyHandler is a simple handler that writes a known value
 func dummyHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusTeapot) // 418 I'm a teapot
-	w.Write([]byte("teapot"))
+	_, _ = w.Write([]byte("teapot"))
 }
 
 // --- buildPrefixes tests ---

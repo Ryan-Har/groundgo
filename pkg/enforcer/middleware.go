@@ -133,7 +133,9 @@ func (e *Enforcer) getUserFromSession(ctx context.Context, session *models.Sessi
 	user, err := e.auth.GetUserByID(ctx, session.UserID)
 	if err != nil || user == nil || !user.IsActive {
 		e.log.Info("session request from expired/unknown/inactive user", "id", session.UserID)
-		e.cookie.ClearUserSessionCookie(w)
+		if err := e.cookie.ClearUserSessionCookie(w); err != nil {
+			e.log.Error(err.Error())
+		}
 		http.Redirect(w, r, e.RedirectOnAuthErrorPath, http.StatusSeeOther)
 		return nil, errors.New("invalid user session")
 	}
@@ -183,7 +185,9 @@ func (e *Enforcer) validateTokenAndGetUser(ctx context.Context, tokenString stri
 func (e *Enforcer) handleSessionError(err error, cookie *http.Cookie, w http.ResponseWriter, r *http.Request) {
 	if errors.Is(err, sessionstore.ErrSessionExpired) {
 		e.log.Debug("expired session found", "session_id", cookie.Value, "url", r.URL.Path)
-		e.cookie.ClearUserSessionCookie(w)
+		if err := e.cookie.ClearUserSessionCookie(w); err != nil {
+			e.log.Error(err.Error())
+		}
 		http.Redirect(w, r, e.RedirectOnAuthErrorPath, http.StatusSeeOther)
 	} else {
 		e.log.Error("unknown error getting session cookie", "error", err.Error())
