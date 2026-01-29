@@ -15,28 +15,19 @@ import (
 
 // newEnforcerFromMocks is a helper which provides an enforcer type with mocks
 func newEnforcerFromMocks() (*Enforcer,
-	*testutil.AuthStoreMock,
-	*testutil.SessionStoreMock,
-	*testutil.TokenStoreMock,
-	*testutil.CookieStoreMock) {
+	*testutil.ProcessorMock) {
 
-	auth := &testutil.AuthStoreMock{}
-	session := &testutil.SessionStoreMock{}
-	token := &testutil.TokenStoreMock{}
-	cookie := &testutil.CookieStoreMock{}
+	flow := &testutil.ProcessorMock{}
 
 	cfg := &EnforcerConfig{
 		Logger:             testutil.NoopLogger(),
 		Router:             http.NewServeMux(),
-		Auth:               auth,
-		Session:            session,
-		Token:              token,
-		Cookie:             cookie,
+		WorkflowProcessor:  flow,
 		APIRequestDetector: apidetector.Default,
 	}
 
 	enf, _ := New(cfg)
-	return enf, auth, session, token, cookie
+	return enf, flow
 }
 
 // dummyHandler is a simple handler that writes a known value
@@ -119,7 +110,7 @@ func TestBuildPrefixes(t *testing.T) {
 
 // Additional FindMatchingPolicy tests for HTTP-specific scenarios
 func TestFindMatchingPolicyHTTPScenarios(t *testing.T) {
-	enf, _, _, _, _ := newEnforcerFromMocks()
+	enf, _ := newEnforcerFromMocks()
 
 	// Setup realistic HTTP route policies
 	enf.SetPolicy("/api/v1/users", "GET", models.RoleUser)
@@ -278,7 +269,7 @@ func TestPolicyMatching(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			enf, _, _, _, _ := newEnforcerFromMocks()
+			enf, _ := newEnforcerFromMocks()
 			tc.setupPolicies(enf)
 
 			role, found := enf.FindMatchingPolicy(tc.path, tc.method)
@@ -289,7 +280,7 @@ func TestPolicyMatching(t *testing.T) {
 }
 
 func TestSetPolicyStoresUppercaseMethods(t *testing.T) {
-	enf, _, _, _, _ := newEnforcerFromMocks()
+	enf, _ := newEnforcerFromMocks()
 	enf.SetPolicy("/some/path", "get", models.RoleAdmin)
 	require.Equal(t, models.RoleAdmin, enf.Policies["/some/path"]["GET"])
 }

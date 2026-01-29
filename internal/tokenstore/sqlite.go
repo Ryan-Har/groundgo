@@ -103,7 +103,7 @@ func (t *sqliteTokenStore) RotateRefreshToken(ctx context.Context, refreshTokenS
 		// As a security measure, if an expired token is used, we can assume
 		// something is wrong and invalidate all sessions for that user.
 		_ = t.queries.DeleteUserRefreshTokens(ctx, oldToken.UserID)
-		return nil, ErrInvalidToken
+		return nil, ErrTokenExpired
 	}
 
 	userResp, err := t.queries.GetUserByID(ctx, oldToken.UserID)
@@ -127,8 +127,12 @@ func (t *sqliteTokenStore) ParseAccessTokenAndValidate(ctx context.Context, toke
 		return nil, err
 	}
 
-	if revoked, err := t.IsAccessTokenRevoked(ctx, accessToken); revoked {
+	revoked, err := t.IsAccessTokenRevoked(ctx, accessToken)
+	if err != nil {
 		return nil, err
+	}
+	if revoked {
+		return nil, ErrTokenRevoked
 	}
 
 	return accessToken, nil
@@ -137,13 +141,23 @@ func (t *sqliteTokenStore) ParseAccessTokenAndValidate(ctx context.Context, toke
 // ParseAccessToken validates and parses a JWT string, returning the claims if valid.
 func (t *sqliteTokenStore) ParseAccessToken(ctx context.Context, tokenStr string) (*AccessToken, error) {
 	token, err := jwt.ParseWithClaims(tokenStr, &AccessToken{}, func(token *jwt.Token) (interface{}, error) {
+		// Ensure the signing method is what you expect (HMAC)
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
 		return []byte(t.jwtSecret), nil
 	})
 
 	if err != nil {
-		return nil, err
+		// Map the library error to your custom ErrTokenExpired
+		if errors.Is(err, jwt.ErrTokenExpired) {
+			return nil, ErrTokenExpired
+		}
+		// Map everything else (malformed, signature mismatch, etc.) to ErrInvalidToken
+		return nil, ErrInvalidToken
 	}
 
+	// Extract claims and verify the Valid flag
 	payload, ok := token.Claims.(*AccessToken)
 	if !ok || !token.Valid {
 		return nil, ErrInvalidToken

@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/Ryan-Har/groundgo/pkg/apidetector"
 	"github.com/Ryan-Har/groundgo/pkg/builtins"
 	"github.com/Ryan-Har/groundgo/pkg/enforcer"
 	"github.com/Ryan-Har/groundgo/pkg/store"
+	"github.com/Ryan-Har/groundgo/pkg/workflow"
 )
 
 type GroundGo struct {
@@ -15,6 +17,7 @@ type GroundGo struct {
 	Store    *store.Store       // stores available to use (Auth, Session, Token, Cookie)
 	Enforcer *enforcer.Enforcer // enforcer handled authentication and authorisation
 	Builtin  *builtins.Builtin  // builtin components ready for use
+	*workflow.Workflow
 
 	config *Config
 
@@ -87,13 +90,13 @@ func New(opts ...Option) (*GroundGo, error) {
 	gg.Store = stores
 	gg.logger.Info("groundgo stores loaded")
 
+	wf := workflow.NewWorkflow(*stores, apidetector.Default, true, gg.logger)
+	gg.Workflow = wf
+
 	gg.config.EnforcerConfig = enforcer.EnforcerConfig{
-		Logger:  gg.logger,
-		Router:  gg.router,
-		Auth:    gg.Store.Auth,
-		Session: gg.Store.Session,
-		Token:   gg.Store.Token,
-		Cookie:  gg.Store.Cookie,
+		Logger:            gg.logger,
+		Router:            gg.router,
+		WorkflowProcessor: wf,
 	}
 
 	enf, err := enforcer.New(&gg.config.EnforcerConfig)

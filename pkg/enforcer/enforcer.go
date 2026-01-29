@@ -12,6 +12,7 @@ import (
 	"github.com/Ryan-Har/groundgo/internal/tokenstore"
 	"github.com/Ryan-Har/groundgo/pkg/apidetector"
 	"github.com/Ryan-Har/groundgo/pkg/models"
+	"github.com/Ryan-Har/groundgo/pkg/workflow"
 	"github.com/google/uuid"
 )
 
@@ -26,10 +27,8 @@ type Enforcer struct {
 	Policies map[string]map[string]models.Role  // e.g route: {Get: RoleUser, Post: RoleAdmin}
 	handlers map[string]map[string]http.Handler // path -> method -> handler internal mapping
 	router   Router                             // used for middlewares and creating routes
-	auth     AuthStore
-	session  SessionStore
-	token    TokenStore
-	cookie   CookieStore
+
+	flow workflow.Processor
 	// APIDetector determines if a request should get API-style responses
 	// Defaults to defaultAPIDetector if not set
 	APIDetector apidetector.APIRequestDetector
@@ -90,10 +89,7 @@ func New(cfg *EnforcerConfig) (*Enforcer, error) {
 		Policies:                make(map[string]map[string]models.Role),
 		handlers:                make(map[string]map[string]http.Handler),
 		router:                  cfg.Router,
-		auth:                    cfg.Auth,
-		session:                 cfg.Session,
-		token:                   cfg.Token,
-		cookie:                  cfg.Cookie,
+		flow:                    cfg.WorkflowProcessor,
 		APIDetector:             cfg.APIRequestDetector,
 	}
 
@@ -199,12 +195,9 @@ type EnforcerConfig struct {
 	Logger                  *slog.Logger
 	GuestStateEnabled       bool                           //determines if guest require state, if not, no session or cookie is provided (default false)
 	RedirectOnAuthErrorPath string                         // path of the redirection location when authentication fails (default /login)
+	WorkflowProcessor       workflow.Processor             // interface for operations performed by the enforcer
 	APIRequestDetector      apidetector.APIRequestDetector // optional override for how to determine if a request is an api request
 	Router                  Router                         // router interface implementation, usually http.ServeMux
-	Auth                    AuthStore                      // authstore interface
-	Session                 SessionStore                   // seessionstore interface
-	Token                   TokenStore                     // tokenstore interface
-	Cookie                  CookieStore                    // cookiestore interface
 }
 
 func (c *EnforcerConfig) validateAndSetDefaults() error {
@@ -220,20 +213,8 @@ func (c *EnforcerConfig) validateAndSetDefaults() error {
 		return errors.New("router must be provided")
 	}
 
-	if c.Auth == nil {
-		return errors.New("auth store must be provided")
-	}
-
-	if c.Session == nil {
-		return errors.New("session store must be provided")
-	}
-
-	if c.Token == nil {
-		return errors.New("token store must be provided")
-	}
-
-	if c.Cookie == nil {
-		return errors.New("cookie store must be provided")
+	if c.WorkflowProcessor == nil {
+		return errors.New("workflow processor interface must be provided")
 	}
 
 	if c.APIRequestDetector == nil {

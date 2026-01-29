@@ -2,16 +2,10 @@ package enforcer
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/Ryan-Har/groundgo/api"
-	"github.com/Ryan-Har/groundgo/internal/sessionstore"
-	"github.com/Ryan-Har/groundgo/pkg/middlewarectx"
 	"github.com/Ryan-Har/groundgo/pkg/models"
-	"github.com/google/uuid"
 )
 
 // AuthenticationMiddleware is an HTTP middleware that extracts and validates
@@ -37,43 +31,13 @@ import (
 //   - A *models.User is stored under the key `userContextKey` for downstream handlers.
 func (e *Enforcer) AuthenticationMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var authUser *models.User
-		var tokenString string
-		var isAuthenticated bool
+		var ctx context.Context
 
-		// check for JWT bearer token first
-		if user, token, ok := e.tryJWTAuth(r); ok {
-			authUser = user
-			tokenString = token
-			isAuthenticated = true
+		_, ctx, err := e.flow.AuthenticateRequest(r)
+		// user is not authenticated
+		if err != nil {
+			_, ctx = e.flow.EnsureGuest(r, w)
 		}
-
-		// try session-based authentication next if user is not using JWT
-		// returned user could be guest
-		if !isAuthenticated {
-			user, ok := e.trySessionAuth(r, w)
-			if ok {
-				authUser = user
-				isAuthenticated = true
-			}
-		}
-
-		// fallback: if neither authentication method worked, assign guest role
-		if !isAuthenticated {
-			user, err := e.createGuestSession(r, w)
-			if err != nil {
-				if e.APIDetector(r) {
-					api.ReturnError(w, e.log, api.InternalServerError)
-				} else {
-					http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-				}
-				return
-			}
-			authUser = user
-		}
-
-		// Store the user and jwt string (if available) in the request context
-		ctx := middlewarectx.ContextWithUserAndJWT(r.Context(), authUser, tokenString)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
@@ -104,9 +68,9 @@ func (e *Enforcer) AuthenticationMiddleware(next http.Handler) http.Handler {
 func (e *Enforcer) AuthorizationMiddleware(path string, required models.Role) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			user, ok := middlewarectx.UserFromContext(r.Context())
-			if !ok {
-				e.log.Error("AuthorizationMiddleware expected User in http context and did not receive", "path", path)
+			user, err := e.flow.ResolveUser(r)
+			if err != nil {
+				e.log.Error("AuthorizationMiddleware expected User in http context and did not receive", "path", path, "error", err)
 				e.respondForbidden(w, r)
 				return
 			}
@@ -120,78 +84,6 @@ func (e *Enforcer) AuthorizationMiddleware(path string, required models.Role) fu
 
 			next.ServeHTTP(w, r)
 		})
-	}
-}
-
-// getUserFromSession handles session-based authentication
-// It returns the user model if it exists or a guest user model if uuid is nil.
-func (e *Enforcer) getUserFromSession(ctx context.Context, session *models.Session, w http.ResponseWriter, r *http.Request) (*models.User, error) {
-	if session.UserID == uuid.Nil {
-		return models.NewGuestUser(), nil
-	}
-
-	user, err := e.auth.GetUserByID(ctx, session.UserID)
-	if err != nil || user == nil || !user.IsActive {
-		e.log.Info("session request from expired/unknown/inactive user", "id", session.UserID)
-		if err := e.cookie.ClearUserSessionCookie(w); err != nil {
-			e.log.Error(err.Error())
-		}
-		http.Redirect(w, r, e.RedirectOnAuthErrorPath, http.StatusSeeOther)
-		return nil, errors.New("invalid user session")
-	}
-	return user, nil
-}
-
-func (e *Enforcer) extractBearerToken(r *http.Request) (string, error) {
-	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" {
-		return "", errors.New("no authorization header")
-	}
-
-	parts := strings.SplitN(authHeader, " ", 2)
-	if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-		return "", errors.New("invalid authorization header format")
-	}
-
-	token := strings.TrimSpace(parts[1])
-	if token == "" {
-		return "", errors.New("empty token")
-	}
-
-	return token, nil
-}
-
-func (e *Enforcer) validateTokenAndGetUser(ctx context.Context, tokenString string) (*models.User, error) {
-	payload, err := e.token.ParseAccessTokenAndValidate(ctx, tokenString)
-	if err != nil {
-		return nil, err
-	}
-
-	subID, err := uuid.Parse(payload.Subject)
-	if err != nil {
-		return nil, fmt.Errorf("unable to parse payload subject: %w", err)
-	}
-
-	user, err := e.auth.GetUserByID(ctx, subID)
-	if err != nil {
-		return nil, err
-	}
-
-	return user, nil
-}
-
-// handleSessionError processes session-related errors
-// Since we're dealing with cookies, we assume this is a browser request and redirect
-func (e *Enforcer) handleSessionError(err error, cookie *http.Cookie, w http.ResponseWriter, r *http.Request) {
-	if errors.Is(err, sessionstore.ErrSessionExpired) {
-		e.log.Debug("expired session found", "session_id", cookie.Value, "url", r.URL.Path)
-		if err := e.cookie.ClearUserSessionCookie(w); err != nil {
-			e.log.Error(err.Error())
-		}
-		http.Redirect(w, r, e.RedirectOnAuthErrorPath, http.StatusSeeOther)
-	} else {
-		e.log.Error("unknown error getting session cookie", "error", err.Error())
-		http.Redirect(w, r, e.RedirectOnAuthErrorPath, http.StatusInternalServerError)
 	}
 }
 
@@ -213,84 +105,6 @@ func (e *Enforcer) WrapHandler(path, method string, h http.Handler) http.Handler
 	return h
 }
 
-func (e *Enforcer) getSessionFromCookie(r *http.Request) (*models.Session, *http.Cookie, error) {
-	cookie, err := r.Cookie("session_token")
-	if err != nil {
-		return nil, nil, err
-	}
-	session, err := e.session.Get(r.Context(), cookie.Value)
-	return session, cookie, err
-}
-
-// tryJWTAuth attempts to extract and validate a JWT Bearer token from the request.
-// If successful, it returns the authenticated user, the token string, and true.
-// On failure, it logs the error and returns nil, "", false.
-func (e *Enforcer) tryJWTAuth(r *http.Request) (*models.User, string, bool) {
-	tokenStr, err := e.extractBearerToken(r)
-	if err != nil {
-		return nil, "", false
-	}
-
-	user, err := e.validateTokenAndGetUser(r.Context(), tokenStr)
-	if err != nil {
-		e.log.Debug("JWT authentication failed", "type", "jwt_invalid", "url", r.URL.Path)
-		return nil, "", false
-	}
-
-	return user, tokenStr, true
-}
-
-// trySessionAuth attempts to retrieve and validate a session from the session cookie.
-// If the session is valid (including guest sessions), it returns the user and true.
-// If the session is expired or invalid, it handles the response (e.g., clearing cookie or redirecting).
-// On failure, it returns nil and false.
-func (e *Enforcer) trySessionAuth(r *http.Request, w http.ResponseWriter) (*models.User, bool) {
-	session, cookie, err := e.getSessionFromCookie(r)
-	if session != nil && err == nil {
-		user, err := e.getUserFromSession(r.Context(), session, w, r)
-		if err == nil && user != nil {
-			return user, true
-		}
-		return nil, false // error already handled
-	}
-
-	if cookie != nil && err != nil {
-		e.handleSessionError(err, cookie, w, r)
-	}
-
-	return nil, false
-}
-
-// createGuestSession creates a new session for an unauthenticated (guest) user.
-// It sets a session cookie in the response, and returns a User with RoleGuest.
-// If session creation or user resolution fails, an error is returned.
-func (e *Enforcer) createGuestSession(r *http.Request, w http.ResponseWriter) (*models.User, error) {
-	e.log.Debug("unauthenticated request, creating guest session",
-		"guest_state_enabled", e.GuestStateEnabled,
-		"remote_address", r.RemoteAddr,
-		"url", r.URL.Path,
-		"user_agent", r.UserAgent())
-
-	// only write to stores and create a cookie if the state is enabled
-	if e.GuestStateEnabled {
-		guestSession, err := e.session.Create(r.Context(), uuid.Nil)
-		if err != nil {
-			e.log.Error("unable to create guest session", "err", err)
-			return nil, err
-		}
-		if err := e.cookie.SetGuestCookie(w, guestSession.ID, &guestSession.ExpiresAt); err != nil {
-			return nil, err
-		}
-
-		user, err := e.getUserFromSession(r.Context(), guestSession, w, r)
-		if err != nil {
-			return nil, err
-		}
-		return user, nil
-	} else {
-		return models.NewGuestUser(), nil
-	}
-}
 
 func (e *Enforcer) respondForbidden(w http.ResponseWriter, r *http.Request) {
 	if e.APIDetector(r) {

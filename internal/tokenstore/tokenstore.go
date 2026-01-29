@@ -44,9 +44,10 @@ type AccessToken struct {
 	jwt.RegisteredClaims
 }
 
-// ErrInvalidToken is a sentinel error for invalid or expired tokens.
-var ErrInvalidToken = errors.New("invalid or expired token")
+var ErrInvalidToken = errors.New("invalid token")
+var ErrTokenExpired = errors.New("expired token")
 var ErrTokenReuseDetected = errors.New("token reuse detected")
+var ErrTokenRevoked = errors.New("token has been")
 
 // generateRefreshToken creates a secure, random, URL-safe string.
 func generateRefreshToken() (string, error) {

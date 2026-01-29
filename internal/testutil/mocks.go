@@ -299,3 +299,56 @@ func (m *TokenStoreMock) ParseAccessTokenAndValidate(ctx context.Context, tokenS
 	}
 	return accessToken.(*tokenstore.AccessToken), args.Error(1)
 }
+
+// ProcessorMock is a mock implementation of the Processor interface
+type ProcessorMock struct {
+	mock.Mock
+}
+
+func (m *ProcessorMock) ResolveUser(r *http.Request) (*models.User, error) {
+	args := m.Called(r)
+	user := args.Get(0)
+	if user == nil {
+		return nil, args.Error(1)
+	}
+	return user.(*models.User), args.Error(1)
+}
+
+func (m *ProcessorMock) AuthenticateRequest(r *http.Request) (*models.User, context.Context, error) {
+	args := m.Called(r)
+	user := args.Get(0)
+	ctx := args.Get(1)
+	if user == nil && ctx == nil {
+		return nil, nil, args.Error(2)
+	}
+
+	var u *models.User
+	if user != nil {
+		u = user.(*models.User)
+	}
+
+	var c context.Context
+	if ctx != nil {
+		c = ctx.(context.Context)
+	}
+
+	return u, c, args.Error(2)
+}
+
+func (m *ProcessorMock) EnsureGuest(r *http.Request, w http.ResponseWriter) (*models.User, context.Context) {
+	args := m.Called(r, w)
+	user := args.Get(0)
+	ctx := args.Get(1)
+
+	var u *models.User
+	if user != nil {
+		u = user.(*models.User)
+	}
+
+	var c context.Context
+	if ctx != nil {
+		c = ctx.(context.Context)
+	}
+
+	return u, c
+}

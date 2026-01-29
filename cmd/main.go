@@ -51,6 +51,8 @@ func main() {
 	//gg.Enforcer.SetPolicy("/admin/users/{id}", "*", models.RoleSystemAdmin)
 	// gg.Enforcer.SetPolicy("/admin", "*", models.RoleAdmin)
 
+	
+
 	if err := http.ListenAndServe(":8080", mainMux); err != nil {
 		panic("http server failed")
 	}
