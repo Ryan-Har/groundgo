@@ -10,6 +10,7 @@ import (
 	"github.com/Ryan-Har/groundgo/internal/sessionstore"
 	"github.com/Ryan-Har/groundgo/internal/testutil"
 	"github.com/Ryan-Har/groundgo/internal/tokenstore"
+	"github.com/Ryan-Har/groundgo/pkg/apidetector"
 	"github.com/Ryan-Har/groundgo/pkg/models"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
@@ -388,7 +389,7 @@ func Test_defaultAPIDetector(t *testing.T) {
 			for k, v := range tc.headers {
 				req.Header.Set(k, v)
 			}
-			assert.Equal(t, tc.expected, defaultAPIDetector(req))
+			assert.Equal(t, tc.expected, apidetector.Default(req))
 		})
 	}
 }

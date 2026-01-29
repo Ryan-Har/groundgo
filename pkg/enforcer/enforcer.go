@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Ryan-Har/groundgo/internal/tokenstore"
+	"github.com/Ryan-Har/groundgo/pkg/apidetector"
 	"github.com/Ryan-Har/groundgo/pkg/models"
 	"github.com/google/uuid"
 )
@@ -31,7 +32,7 @@ type Enforcer struct {
 	cookie   CookieStore
 	// APIDetector determines if a request should get API-style responses
 	// Defaults to defaultAPIDetector if not set
-	APIDetector APIRequestDetector
+	APIDetector apidetector.APIRequestDetector
 
 	mu sync.RWMutex // mutex to protect policies and handlers maps
 }
@@ -188,16 +189,22 @@ func buildPrefixes(path string) []string {
 	return prefixes
 }
 
+// WithAPIDetector allows users to provide their own API detection logic
+func (e *Enforcer) WithAPIDetector(detector apidetector.APIRequestDetector) *Enforcer {
+	e.APIDetector = detector
+	return e
+}
+
 type EnforcerConfig struct {
 	Logger                  *slog.Logger
-	GuestStateEnabled       bool               //determines if guest require state, if not, no session or cookie is provided (default false)
-	RedirectOnAuthErrorPath string             // path of the redirection location when authentication fails (default /login)
-	APIRequestDetector      APIRequestDetector // optional override for how to determine if a request is an api request
-	Router                  Router             // router interface implementation, usually http.ServeMux
-	Auth                    AuthStore          // authstore interface
-	Session                 SessionStore       // seessionstore interface
-	Token                   TokenStore         // tokenstore interface
-	Cookie                  CookieStore        // cookiestore interface
+	GuestStateEnabled       bool                           //determines if guest require state, if not, no session or cookie is provided (default false)
+	RedirectOnAuthErrorPath string                         // path of the redirection location when authentication fails (default /login)
+	APIRequestDetector      apidetector.APIRequestDetector // optional override for how to determine if a request is an api request
+	Router                  Router                         // router interface implementation, usually http.ServeMux
+	Auth                    AuthStore                      // authstore interface
+	Session                 SessionStore                   // seessionstore interface
+	Token                   TokenStore                     // tokenstore interface
+	Cookie                  CookieStore                    // cookiestore interface
 }
 
 func (c *EnforcerConfig) validateAndSetDefaults() error {
@@ -230,7 +237,7 @@ func (c *EnforcerConfig) validateAndSetDefaults() error {
 	}
 
 	if c.APIRequestDetector == nil {
-		c.APIRequestDetector = defaultAPIDetector
+		c.APIRequestDetector = apidetector.Default
 	}
 
 	return nil

@@ -1,7 +1,6 @@
-package enforcer
+package apidetector
 
 import (
-	"net/http"
 	"net/http/httptest"
 	"testing"
 )
@@ -47,7 +46,7 @@ func TestDefaultAPIDetector(t *testing.T) {
 				req.Header.Set("Content-Type", tt.contentType)
 			}
 
-			got := defaultAPIDetector(req)
+			got := Default(req)
 			if got != tt.expect {
 				t.Errorf("defaultAPIDetector(%q, Accept=%q, Content-Type=%q) = %v; want %v",
 					tt.path, tt.accept, tt.contentType, got, tt.expect)
@@ -71,7 +70,7 @@ func TestPathOnlyDetector(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest("GET", tt.path, nil)
-			got := PathOnlyDetector(req)
+			got := PathOnly(req)
 			if got != tt.expect {
 				t.Errorf("PathOnlyDetector(%q) = %v; want %v", tt.path, got, tt.expect)
 			}
@@ -103,7 +102,7 @@ func TestHeaderOnlyDetector(t *testing.T) {
 				req.Header.Set("Content-Type", tt.contentType)
 			}
 
-			got := HeaderOnlyDetector(req)
+			got := HeaderOnly(req)
 			if got != tt.expect {
 				t.Errorf("HeaderOnlyDetector(Accept=%q, Content-Type=%q) = %v; want %v",
 					tt.accept, tt.contentType, got, tt.expect)
@@ -116,37 +115,14 @@ func TestAlwaysAndNeverDetectors(t *testing.T) {
 	req := httptest.NewRequest("GET", "/anything", nil)
 
 	t.Run("AlwaysAPIDetector should always return true", func(t *testing.T) {
-		if !AlwaysAPIDetector(req) {
+		if !Always(req) {
 			t.Errorf("AlwaysAPIDetector returned false, want true")
 		}
 	})
 
 	t.Run("NeverAPIDetector should always return false", func(t *testing.T) {
-		if NeverAPIDetector(req) {
+		if Never(req) {
 			t.Errorf("NeverAPIDetector returned true, want false")
-		}
-	})
-}
-
-func TestWithAPIDetector(t *testing.T) {
-	e := &Enforcer{}
-	customDetector := func(r *http.Request) bool {
-		return r.URL.Path == "/custom"
-	}
-
-	e.WithAPIDetector(customDetector)
-
-	t.Run("Custom detector returns true for /custom", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/custom", nil)
-		if !e.APIDetector(req) {
-			t.Errorf("Custom detector should return true for /custom")
-		}
-	})
-
-	t.Run("Custom detector returns false for other paths", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/other", nil)
-		if e.APIDetector(req) {
-			t.Errorf("Custom detector should return false for /other")
 		}
 	})
 }

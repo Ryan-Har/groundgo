@@ -2,10 +2,12 @@ package enforcer
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/Ryan-Har/groundgo/internal/testutil"
+	"github.com/Ryan-Har/groundgo/pkg/apidetector"
 	"github.com/Ryan-Har/groundgo/pkg/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -30,7 +32,7 @@ func newEnforcerFromMocks() (*Enforcer,
 		Session:            session,
 		Token:              token,
 		Cookie:             cookie,
-		APIRequestDetector: defaultAPIDetector,
+		APIRequestDetector: apidetector.Default,
 	}
 
 	enf, _ := New(cfg)
@@ -310,4 +312,27 @@ func BenchmarkBuildPrefixes(b *testing.B) {
 			}
 		})
 	}
+}
+
+func TestWithAPIDetector(t *testing.T) {
+	e := &Enforcer{}
+	customDetector := func(r *http.Request) bool {
+		return r.URL.Path == "/custom"
+	}
+
+	e.WithAPIDetector(customDetector)
+
+	t.Run("Custom detector returns true for /custom", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/custom", nil)
+		if !e.APIDetector(req) {
+			t.Errorf("Custom detector should return true for /custom")
+		}
+	})
+
+	t.Run("Custom detector returns false for other paths", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/other", nil)
+		if e.APIDetector(req) {
+			t.Errorf("Custom detector should return false for /other")
+		}
+	})
 }
